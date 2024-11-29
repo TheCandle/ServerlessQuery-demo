@@ -17,5 +17,6 @@ extern void InitStorageConfigureNames();
 extern bool check_enable_gtm_free(bool* newval, void** extra, GucSource source);
 extern void InitializeNumLwLockPartitions(void);
 extern bool need_check_repl_uuid(GucContext ctx);
+extern void InitializeNumSlruBuffers(void);
 
 #endif /* GUC_STORAGE_H */

@@ -172,10 +172,8 @@ const struct LWLOCK_PARTITION_DESC LWLockPartInfo[] = {
 #define FirstInstanceRealTLock (FirstSessionHistLock + NUM_SESSION_HISTORY_PARTITIONS)
 /* Cache Mgr lock IDs */
 #define FirstCacheSlotMappingLock (FirstInstanceRealTLock + NUM_INSTANCE_REALTIME_PARTITIONS)
-#define FirstCSNBufMappingLock (FirstCacheSlotMappingLock + NUM_CACHE_BUFFER_PARTITIONS)
-#define FirstCBufMappingLock (FirstCSNBufMappingLock + NUM_CSNLOG_PARTITIONS)
 /* Instrumentaion */
-#define FirstUniqueSQLMappingLock (FirstCBufMappingLock + NUM_CLOG_PARTITIONS)
+#define FirstUniqueSQLMappingLock (FirstCacheSlotMappingLock + NUM_CACHE_BUFFER_PARTITIONS)
 #define FirstInstrUserLock (FirstUniqueSQLMappingLock + NUM_UNIQUE_SQL_PARTITIONS)
 /* global plan cache */
 #define FirstGPCMappingLock (FirstInstrUserLock + NUM_INSTR_USER_PARTITIONS)
@@ -297,6 +295,10 @@ enum BuiltinTrancheIds
     LWTRANCHE_DMS_BUF_CTRL,
     LWTRANCHE_SYNCREP_WAIT,
     LWTRANCHE_SCANNING_XLOG_TRACK,
+    LWTRANCHE_CLOG_SLRU,
+    LWTRANCHE_CSNLOG_SLRU,
+    LWTRANCHE_MULTIXACTMEMBER_SLRU,
+    LWTRANCHE_MULTIXACTOFFSET_SLRU,
     /*
      * Each trancheId above should have a corresponding item in BuiltinTrancheNames;
      */
