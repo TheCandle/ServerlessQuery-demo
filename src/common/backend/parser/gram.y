@@ -106,7 +106,8 @@ DB_CompatibilityAttr g_dbCompatArray[] = {
     {DB_CMPT_A, "A"},
     {DB_CMPT_B, "B"},
     {DB_CMPT_C, "C"},
-    {DB_CMPT_PG, "PG"}
+    {DB_CMPT_PG, "PG"},
+	{DB_CMPT_D, "D"}
 };
 
 IntervalStylePack g_interStyleVal = {"a"};
@@ -295,6 +296,9 @@ static void CheckUserHostIsValid();
 static void setDelimiterName(core_yyscan_t yyscanner, char*input, VariableSetStmt*n);
 static Node* MakeNoArgFunctionCall(List* funcName, int location);
 static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
+
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-prologue.y.h"*/
 %}
 
 %define api.pure
@@ -874,6 +878,8 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
 %token <ival>	ICONST PARAM
 %token			TYPECAST ORA_JOINOP DOT_DOT COLON_EQUALS PARA_EQUALS SET_IDENT_SESSION SET_IDENT_GLOBAL
 
+%token          DIALECT_TSQL
+
 /*
  * If you want to make any keyword changes, update the keyword table in
  * src/include/parser/kwlist.h and add new keywords to the appropriate one
@@ -1065,6 +1071,8 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
  */
 %nonassoc	UNBOUNDED		/* ideally should have same precedence as IDENT */
 %nonassoc	IDENT GENERATED NULL_P PARTITION SUBPARTITION RANGE ROWS PRECEDING FOLLOWING CUBE ROLLUP
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-nonassoc-ident-tokens"*/
 %left		Op OPERATOR '@'		/* multi-character ops and user-defined operators */
 %nonassoc	NOTNULL
 %nonassoc	ISNULL
@@ -1092,6 +1100,10 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
 %left		JOIN CROSS LEFT FULL RIGHT INNER_P NATURAL ENCRYPTED
 /* kluge to keep xml_whitespace_option from causing shift/reduce conflicts */
 %right		PRESERVE STRIP_P
+
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-decl.y"*/
+
 %%
 
 /*
@@ -30726,6 +30738,9 @@ reserved_keyword:
 			| WITH
 		;
 
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-rule.y"*/
+
 %%
 
 /*
@@ -33137,5 +33152,11 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner)
 #undef yylloc
 #undef yylex
 
-#undef yylex
+#define SCANINC
+
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-epilogue.y.cpp"*/
+
+#ifdef SCANINC
 #include "scan.inc"
+#endif

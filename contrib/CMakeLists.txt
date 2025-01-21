@@ -30,6 +30,7 @@ set(CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/gms_stats
     ${CMAKE_CURRENT_SOURCE_DIR}/gms_profiler
     ${CMAKE_CURRENT_SOURCE_DIR}/age
+    ${CMAKE_CURRENT_SOURCE_DIR}/shark
 )
 
 if(NOT "${ENABLE_LITE_MODE}" STREQUAL "ON")
@@ -76,3 +77,4 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/jieba_tokenizer)
     add_subdirectory(jieba_tokenizer)
 endif()
 add_subdirectory(gms_profiler)
+add_subdirectory(shark)

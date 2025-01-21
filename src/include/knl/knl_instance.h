@@ -91,7 +91,7 @@ const int MAX_AUDIT_NUM = 48;
 #define MAX_REPLICATION_SLOT_NUM 100
 
 #ifndef ENABLE_MULTIPLE_NODES
-const int DB_CMPT_MAX = 4;
+const int DB_CMPT_MAX = 5;
 #endif
 
 enum knl_virtual_role {

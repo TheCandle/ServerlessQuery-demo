@@ -82,6 +82,8 @@
 ./share/postgresql/extension/dblink--1.0.sql
 ./share/postgresql/extension/dblink--unpackaged--1.0.sql
 ./share/postgresql/extension/dblink.control
+./share/postgresql/extension/shark--1.0.sql
+./share/postgresql/extension/shark.control
 ./share/postgresql/timezone/GB-Eire
 ./share/postgresql/timezone/Turkey
 ./share/postgresql/timezone/Kwajalein
@@ -757,6 +759,7 @@
 ./lib/postgresql/java/pljava.jar
 ./lib/postgresql/postgres_fdw.so
 ./lib/postgresql/dblink.so
+./lib/postgresql/shark.so
 ./lib/libpljava.so
 ./lib/libpq.a
 ./lib/libpq.so

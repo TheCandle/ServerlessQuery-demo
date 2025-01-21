@@ -115,6 +115,7 @@ install:
 			echo "SCWS is not installed, skipping chparser build."; \
 		fi \
 	fi
+	@if test -d contrib/shark; then $(MAKE) -C contrib/shark $@; fi
 	+@echo "openGauss installation complete."
 endif
 endif

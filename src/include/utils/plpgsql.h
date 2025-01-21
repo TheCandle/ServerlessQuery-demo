@@ -2174,4 +2174,6 @@ extern void init_lock_hash_table();
 extern void gsplsql_lock_func_pkg_dependency_all(Oid obj_oid, GSPLSQLObjectType type);
 extern void gsplsql_unlock_func_pkg_dependency_all();
 extern void gsplsql_lock_depend_pkg_on_session(PLpgSQL_function* func);
+typedef PLpgSQL_function* (*plsql_compile)(FunctionCallInfo fcinfo, bool forValidator, bool isRecompile);
+
 #endif /* PLPGSQL_H */

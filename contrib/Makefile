@@ -59,7 +59,8 @@ SUBDIRS = \
 		ndpplugin       \
 		gms_profiler    \
 		gms_output      \
-		jieba_tokenizer
+		jieba_tokenizer \
+		shark
 
 ifeq ($(with_openssl),yes)
 SUBDIRS += sslinfo
