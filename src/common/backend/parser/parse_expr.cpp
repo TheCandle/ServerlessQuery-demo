@@ -3110,7 +3110,7 @@ static Node* transformCharsetClause(ParseState* pstate, CharsetClause* c)
     Node *result = NULL;
     Const *con = NULL;
 
-    Assert(DB_IS_CMPT(B_FORMAT));
+    Assert(DB_IS_CMPT_BD);
     result = transformExprRecurse(pstate, c->arg);
     Assert(IsA(result, Const));
     con = (Const*)result;
@@ -3158,7 +3158,7 @@ static Node* transformCollateClause(ParseState* pstate, CollateClause* c)
     * separately, so we'll let it go here.
     */
     if (!type_is_collatable(argtype) && argtype != UNKNOWNOID &&
-        !(DB_IS_CMPT(B_FORMAT) &&
+        !(DB_IS_CMPT_BD &&
             (IsBinaryType(argtype) ||
                 (IsA(newc->arg, Const) && (argtype == BITOID || argtype == VARBITOID))))) {
         ereport(ERROR,
@@ -3168,7 +3168,7 @@ static Node* transformCollateClause(ParseState* pstate, CollateClause* c)
     }
     newc->collOid = LookupCollation(pstate, c->collname, c->location);
     newc->location = c->location;
-    if (!DB_IS_CMPT(B_FORMAT)) {
+    if (!DB_IS_CMPT_BD) {
         return (Node*)newc;
     }
 

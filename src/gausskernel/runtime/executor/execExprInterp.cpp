@@ -338,7 +338,7 @@ ExecMakeFunctionResultNoSets(ExprState *state, ExprEvalStep *op,ExprContext *eco
         fcinfo->swinfo.sw_is_flt_frame = true;
     }
 
-    if (DB_IS_CMPT(B_FORMAT)) {
+    if (DB_IS_CMPT_BD) {
         func_encoding = get_valid_charset_by_collation(fcinfo->fncollation);
         db_encoding = GetDatabaseEncoding();
     }
@@ -921,7 +921,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull, ExprDoneCo
             int func_encoding = PG_INVALID_ENCODING;
             int db_encoding = PG_INVALID_ENCODING;
 
-            if (DB_IS_CMPT(B_FORMAT)) {
+            if (DB_IS_CMPT_BD) {
                 func_encoding = get_valid_charset_by_collation(fcinfo->fncollation);
                 db_encoding = GetDatabaseEncoding();
             }
@@ -953,7 +953,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull, ExprDoneCo
             int func_encoding = PG_INVALID_ENCODING;
             int db_encoding = PG_INVALID_ENCODING;
 
-            if (DB_IS_CMPT(B_FORMAT)) {
+            if (DB_IS_CMPT_BD) {
                 func_encoding = get_valid_charset_by_collation(fcinfo->fncollation);
                 db_encoding = GetDatabaseEncoding();
             }
