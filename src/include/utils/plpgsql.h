@@ -2176,4 +2176,6 @@ extern void gsplsql_unlock_func_pkg_dependency_all();
 extern void gsplsql_lock_depend_pkg_on_session(PLpgSQL_function* func);
 typedef PLpgSQL_function* (*plsql_compile)(FunctionCallInfo fcinfo, bool forValidator, bool isRecompile);
 
+typedef bool (*checkValidUsername)(const char* name);
+
 #endif /* PLPGSQL_H */
