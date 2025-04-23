@@ -2977,6 +2977,8 @@ typedef struct knl_u_hook_context {
     void *checkVaildUserHook;
     void *fetchStatusHook;
     void *rowcountHook;
+    void *checkIsMssqlHexHook;
+    void *rewriteTypmodExprHook;
 } knl_u_hook_context;
 
 typedef struct knl_u_libsw_context {
