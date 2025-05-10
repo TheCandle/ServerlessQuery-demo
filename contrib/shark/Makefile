@@ -2,7 +2,12 @@ EXTENSION = shark
 MODULE_big = shark
 BEPARSERDIR=src/backend_parser
 PLDIR=src/pltsql
-DATA = shark--1.0.sql
+
+shark--2.0.sql: shark--1.0.sql upgrade_script/shark--1.0--2.0.sql
+	cat $^ > $@
+
+DATA_built = shark--2.0.sql
+DATA = shark--2.0.sql upgrade_script/shark--1.0--2.0.sql rollback_script/shark--2.0--1.0.sql
 REGRESS = dummy
 
 OBJS = shark.o dbcc.o varlena.o
@@ -104,7 +109,5 @@ $(PLDIR)/pl_reserved_kwlist_d.h: $(PLDIR)/pl_reserved_kwlist.h $(GEN_KEYWORDLIST
 $(PLDIR)/pl_unreserved_kwlist_d.h: $(PLDIR)/pl_unreserved_kwlist.h $(GEN_KEYWORDLIST_DEPS)
 	$(GEN_KEYWORDLIST) --varname UnreservedPLKeywords $<
 
-
-
 all:
-	chmod +x ./smartmatch.pl 
+	chmod +x ./smartmatch.pl
