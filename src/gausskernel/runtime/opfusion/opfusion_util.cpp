@@ -476,25 +476,36 @@ FusionType checkFusionAgg(Agg *node, ParamListInfo params)
 
     Aggref *aggref = (Aggref *)res->expr;
 
-    if (list_length(aggref->args) != 1 ||
-            aggref->aggorder != NULL ||
+    if (aggref->aggorder != NULL ||
             aggref->aggdistinct != NULL ||
             aggref->aggvariadic) {
         return NOBYPASS_AGGREF_TARGET_ALLOWED;
     }
 
+    /* for count, currently we only support 1 arg or star, maybe we can support more cases in future */
     switch (aggref->aggfnoid) {
         case INT2SUMFUNCOID:
         case INT4SUMFUNCOID:
         case INT8SUMFUNCOID:
         case NUMERICSUMFUNCOID:
+        case ANYCOUNTOID:
+            if (list_length(aggref->args) != 1) {
+                return NOBYPASS_AGGREF_TARGET_ALLOWED;
+            }
             break;
+        case COUNTOID:
+            if (!aggref->aggstar) {
+                return NOBYPASS_AGGREF_TARGET_ALLOWED;
+            }
+            /* count(*) has no arg, so we can return here */
+            return BYPASS_OK;
         default:
             return NOBYPASS_JUST_SUM_ALLOWED;
     }
 
     res = (TargetEntry *)linitial(aggref->args);
-    if (!IsA(res->expr, Var)) {
+    /* support count(const) */
+    if (!IsA(res->expr, Var) && !(IsA(res->expr, Const) && aggref->aggfnoid == ANYCOUNTOID)) {
         return NOBYPASS_JUST_VAR_FOR_AGGARGS;
     }
 
