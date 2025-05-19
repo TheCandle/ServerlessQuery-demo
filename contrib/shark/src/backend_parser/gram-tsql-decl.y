@@ -7,4 +7,4 @@
 %type <boolean> opt_with_no_infomsgs
 %type <node> TSQL_AnonyBlockStmt TSQL_CreateFunctionStmt
 %type <str> tsql_opt_transaction_name
-%type <keyword> tsql_transaction_keywords tsql_opt_work_keywords
+%type <keyword> tsql_transaction_keywords
