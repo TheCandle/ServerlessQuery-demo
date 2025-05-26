@@ -107,6 +107,7 @@ set(TGT_shark_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/datefuncs.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/${BEPARSERDIR}/gram-backend.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/${BEPARSERDIR}/keywords.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/${BEPARSERDIR}/varbinary.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/${BEPARSERDIR}/parser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/${PLDIR}/pl_gram.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/${PLDIR}/pl_handler.cpp
