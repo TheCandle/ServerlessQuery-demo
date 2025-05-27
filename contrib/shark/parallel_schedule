@@ -17,3 +17,4 @@ test: table_hint
 test: proc
 test: table_filegroup_index_option
 test: use_database
+test: procedure

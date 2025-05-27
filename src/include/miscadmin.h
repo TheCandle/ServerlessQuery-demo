@@ -188,7 +188,8 @@ extern bool contain_backend_version(uint32 version_number);
 
 #define D_FORMAT_OPT_ENABLE_SBR_IDENTIFIER 1
 #define D_FORMAT_OPT_ENABLE_TABLE_HINT_IDENTIFIER 2
-#define D_FORMAT_OPT_MAX 2
+#define D_FORMAT_OPT_ENABLE_ABS 4
+#define D_FORMAT_OPT_MAX 3
 
 
 #define ENABLE_SET_SESSION_TRANSACTION                                                                   \
@@ -214,6 +215,9 @@ extern bool contain_backend_version(uint32 version_number);
 
 #define ENABLE_TABLE_HINT_IDENTIFIER ((u_sess->utils_cxt.d_format_behavior_compat_flags & \
         D_FORMAT_OPT_ENABLE_TABLE_HINT_IDENTIFIER) && u_sess->attr.attr_sql.sql_compatibility == D_FORMAT)
+
+#define ENABLE_ABS ((u_sess->utils_cxt.d_format_behavior_compat_flags & \
+        D_FORMAT_OPT_ENABLE_ABS) && u_sess->attr.attr_sql.sql_compatibility == D_FORMAT)
 
 #define OPT_DISPLAY_LEADING_ZERO (1LL << 0)
 #define OPT_END_MONTH_CALCULATE  (1LL << 1)
