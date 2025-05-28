@@ -2979,6 +2979,7 @@ typedef struct knl_u_hook_context {
     void *rowcountHook;
     void *checkIsMssqlHexHook;
     void *rewriteTypmodExprHook;
+    void *invokeNextvalHook;
 } knl_u_hook_context;
 
 typedef struct knl_u_libsw_context {
