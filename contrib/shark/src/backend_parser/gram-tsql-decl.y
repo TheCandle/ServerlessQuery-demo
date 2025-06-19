@@ -7,6 +7,6 @@
 %type <keyword>  tsql_opt_clustered tsql_opt_columnstore
 %token <str>	TSQL_ATAT_IDENT
 %type <boolean> opt_with_no_infomsgs
-%type <node> TSQL_AnonyBlockStmt TSQL_CreateFunctionStmt
+%type <node> TSQL_AnonyBlockStmt TSQL_CreateFunctionStmt TSQL_DoStmt
 %type <str> tsql_opt_transaction_name
 %type <keyword> tsql_transaction_keywords

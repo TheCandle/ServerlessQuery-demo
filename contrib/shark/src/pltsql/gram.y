@@ -376,7 +376,7 @@ static void CheckParallelCursorOpr(PLpgSQL_stmt_fetch* fetch);
 
 %type <def>		spec_proc
 %type <str>		any_identifier opt_block_label opt_label goto_block_label label_name init_proc
-%type <str>		opt_rollback_to opt_savepoint_name savepoint_name attr_name
+%type <str>		opt_rollback_to opt_savepoint_name savepoint_name attr_name opt_savepoint_label
 
 %type <list>	proc_sect proc_stmts stmt_elsifs stmt_else forall_body
 %type <loop_body>	loop_body
@@ -422,6 +422,7 @@ static void CheckParallelCursorOpr(PLpgSQL_stmt_fetch* fetch);
 %type <boolean> opt_save_exceptions
 
 %type <keyword> unreserved_keyword_func
+%type <keyword> transaction_keywords opt_transaction_keywords
 
 /*
  * Basic non-keyword token types.  These are hard-wired into the core lexer.
@@ -610,6 +611,8 @@ static void CheckParallelCursorOpr(PLpgSQL_stmt_fetch* fetch);
 %token <keyword>	K_TABLE_NAME
 %token <keyword>	K_THEN
 %token <keyword>	K_TO
+%token <keyword>	K_TRAN
+%token <keyword>	K_TRANSACTION
 %token <keyword>	K_TRUE
 %token <keyword>	K_TYPE
 %token <keyword>	K_UNION
@@ -6004,7 +6007,17 @@ stmt_null		: K_NULL ';'
                     }
                 ;
 
-stmt_commit		: opt_block_label K_COMMIT ';'
+transaction_keywords :
+                K_TRAN
+                | K_TRANSACTION
+                ;
+
+opt_transaction_keywords :
+                transaction_keywords
+                | /* empty */
+                ;
+
+stmt_commit		: opt_block_label K_COMMIT opt_transaction_keywords opt_savepoint_label ';'
                     {
                         PLpgSQL_stmt_commit *newp;
 
@@ -6038,9 +6051,26 @@ opt_savepoint_name :
                     }
                 ;
 
+opt_savepoint_label :
+                savepoint_name
+                    {
+                        $$ = $1;
+                    }
+                | /* empty */
+                    {
+                         $$ = NULL;
+                    }
+                ;
+
+
 opt_rollback_to :
+                opt_transaction_keywords
                     {
                         $$ = NULL;
+                    }
+                | transaction_keywords savepoint_name
+                    {
+                        $$ = $2;
                     }
                 | K_TO opt_savepoint_name
                     {
@@ -6088,6 +6118,21 @@ stmt_savepoint : opt_block_label K_SAVEPOINT savepoint_name ';'
                         newp->sqlString = plpgsql_get_curline_query();
                         newp->opType = PLPGSQL_SAVEPOINT_CREATE;
                         newp->spName = $3;
+                        plpgsql_ns_pop();
+
+                        $$ = (PLpgSQL_stmt *)newp;
+                        record_stmt_label($1, (PLpgSQL_stmt *)newp);
+                    }
+                | opt_block_label K_SAVE opt_transaction_keywords savepoint_name ';'
+                    {
+                        PLpgSQL_stmt_savepoint *newp;
+
+                        newp = (PLpgSQL_stmt_savepoint *) palloc(sizeof(PLpgSQL_stmt_savepoint));
+                        newp->cmd_type = PLPGSQL_STMT_SAVEPOINT;
+                        newp->lineno = plpgsql_location_to_lineno(@2);
+                        newp->sqlString = plpgsql_get_curline_query();
+                        newp->opType = PLPGSQL_SAVEPOINT_CREATE;
+                        newp->spName = $4;
                         plpgsql_ns_pop();
 
                         $$ = (PLpgSQL_stmt *)newp;
