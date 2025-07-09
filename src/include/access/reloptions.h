@@ -53,6 +53,7 @@ typedef enum relopt_kind {
     RELOPT_KIND_PPARSER = (1 << 14), /* text search configuration options defined by pound */
     RELOPT_KIND_IVFFLAT = (1 << 15),
     RELOPT_KIND_HNSW = (1 << 16),
+    RELOPT_KIND_DISKANN = (1 << 17),
     RELOPT_KIND_D_INDEX = (1 << 18),
     RELOPT_KIND_BM25 = (1 << 19),
     /* if you add a new kind, make sure you update "last_default" too */
@@ -314,4 +315,3 @@ void CheckCompressOption(TableCreateSupport *tableCreateSupport);
 bool CheckSegmentStorageOption(List *options);
 void CheckSegmentCompressOption(List *options, char relkind, StorageType storage_type, char* storeChar);
 #endif /* RELOPTIONS_H */
-
