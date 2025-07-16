@@ -351,7 +351,7 @@ tsql_IndexStmt:
 		;
 
 tsql_CreateProcedureStmt:
-			CREATE opt_or_replace definer_user PROCEDURE func_name_opt_arg proc_args
+			CREATE opt_or_replace definer_user procedure_or_proc func_name_opt_arg proc_args
 			opt_createproc_opt_list as_is {
 				u_sess->parser_cxt.eaten_declare = false;
 				u_sess->parser_cxt.eaten_begin = false;
@@ -403,7 +403,39 @@ tsql_CreateProcedureStmt:
                     u_sess->parser_cxt.isCreateFuncOrProc = false;
 					$$ = (Node *)n;
 				}
+			| CREATE opt_or_replace definer_user procedure_or_proc func_name_opt_arg proc_args
+                       LANGUAGE ColId_or_Sconst AS func_as opt_createproc_opt_list
+                               {
+                                       CreateFunctionStmt *n = makeNode(CreateFunctionStmt);
+                                       int count = get_outarg_num($6);
+                                       n->isOraStyle = false;
+                                       n->isPrivate = false;
+                                       n->replace = $2;
+                                       n->definer = $3;
+                                       if (n->replace && NULL != n->definer) {
+                                               parser_yyerror("not support DEFINER function");
+                                       }
+                                       n->funcname = $5;
+                                       n->parameters = $6;
+                                       n->returnType = NULL;
+                                       if (0 == count)
+                                       {
+                                               n->returnType = makeTypeName("void");
+                                               n->returnType->typmods = NULL;
+                                               n->returnType->arrayBounds = NULL;
+                                       }
+                                       n->options = $11;
+                                       n->options = lappend(n->options, makeDefElem("language", (Node *)makeString($8)));
+                                       n->options = lappend(n->options, makeDefElem("as", (Node *)$10));
+                                       n->withClause = NIL;
+                                       n->isProcedure = true;
+                                       $$ = (Node *)n;
+							   }
 		;
+
+procedure_or_proc:     PROCEDURE
+                       | TSQL_PROC
+				;
 
 ColConstraintElem:     IDENTITY_P identity_seed_increment
                             {
@@ -414,7 +446,121 @@ ColConstraintElem:     IDENTITY_P identity_seed_increment
                                 n->location = @1;
                                 $$ = (Node *)n;
                             }
-                        ;
+						| opt_unique_key opt_definition OptConsTableSpaceWithEmpty InformationalConstraintElem FileGroup
+							{
+								Constraint *n = makeNode(Constraint);
+								n->contype = CONSTR_UNIQUE;
+								n->location = @1;
+								n->keys = NULL;
+								n->options = $2;
+								n->indexname = NULL;
+								n->indexspace = $3;
+								n->inforConstraint = (InformationalConstraint *) $4;
+								n->initially_valid = true;
+								$$ = (Node *)n;
+							}
+						| opt_unique_key opt_definition OptConsTableSpaceWithEmpty ENABLE_P ConstraintAttr_isValidate InformationalConstraintElem FileGroup
+							{
+								Constraint *n = makeNode(Constraint);
+								n->contype = CONSTR_UNIQUE;
+								n->location = @1;
+								n->keys = NULL;
+								n->options = $2;
+								n->indexname = NULL;
+								n->indexspace = $3;
+
+								int cas_type = 0;
+								if ($5 == CAS_NO_VALIDATE)
+									cas_type = CAS_NOT_VALID;
+								processCASbits(cas_type, @5, "UNIQUE",
+												&n->deferrable, &n->initdeferred, &n->skip_validation,
+												NULL, yyscanner);
+								n->initially_valid = !n->skip_validation;
+								n->isdisable = false;
+								n->inforConstraint = (InformationalConstraint *) $6;
+								$$ = (Node *)n;
+							}
+						| opt_unique_key opt_definition OptConsTableSpaceWithEmpty DISABLE_P ConstraintAttr_isValidate InformationalConstraintElem FileGroup
+							{
+								Constraint *n = makeNode(Constraint);
+								n->contype = CONSTR_UNIQUE;
+								n->location = @1;
+								n->keys = NULL;
+								n->options = $2;
+								n->indexname = NULL;
+								n->indexspace = $3;
+								
+								int cas_type = 0;
+								if ($5 == CAS_VALIDATE)
+									cas_type = CAS_DISABLE_VALIDATE;
+								else
+									cas_type = CAS_DISABLE_NO_VALIDATE;
+								processCASbits(cas_type, @5, "UNIQUE",
+												&n->deferrable, &n->initdeferred, &n->skip_validation,
+												NULL, yyscanner);
+								n->initially_valid = !n->skip_validation;
+								n->isdisable = true;
+								n->inforConstraint = (InformationalConstraint *) $6;
+								$$ = (Node *)n;
+							}
+						| PRIMARY KEY opt_definition OptConsTableSpaceWithEmpty InformationalConstraintElem FileGroup
+							{
+								Constraint *n = makeNode(Constraint);
+								n->contype = CONSTR_PRIMARY;
+								n->location = @1;
+								n->keys = NULL;
+								n->options = $3;
+								n->indexname = NULL;
+								n->indexspace = $4;
+								n->inforConstraint = (InformationalConstraint *) $5;
+								n->initially_valid = true;
+								$$ = (Node *)n;
+							}
+						| PRIMARY KEY opt_definition OptConsTableSpaceWithEmpty ENABLE_P ConstraintAttr_isValidate InformationalConstraintElem FileGroup
+							{
+								Constraint *n = makeNode(Constraint);
+								n->contype = CONSTR_PRIMARY;
+								n->location = @1;
+								n->keys = NULL;
+								n->options = $3;
+								n->indexname = NULL;
+								n->indexspace = $4;
+								
+								int cas_type = 0;
+								if ($6 == CAS_NO_VALIDATE)
+									cas_type = CAS_NOT_VALID;
+								processCASbits(cas_type, @6, "PRIMARY KEY",
+												&n->deferrable, &n->initdeferred, &n->skip_validation,
+												NULL, yyscanner);
+								n->initially_valid = !n->skip_validation;
+								n->isdisable = false;
+								n->inforConstraint = (InformationalConstraint *) $7;
+								$$ = (Node *)n;
+							}
+						| PRIMARY KEY opt_definition OptConsTableSpaceWithEmpty DISABLE_P ConstraintAttr_isValidate InformationalConstraintElem FileGroup
+							{
+								Constraint *n = makeNode(Constraint);
+								n->contype = CONSTR_PRIMARY;
+								n->location = @1;
+								n->keys = NULL;
+								n->options = $3;
+								n->indexname = NULL;
+								n->indexspace = $4;
+								
+								int cas_type = 0;
+								if ($6 == CAS_VALIDATE)
+									cas_type = CAS_DISABLE_VALIDATE;
+								else
+									cas_type = CAS_DISABLE_NO_VALIDATE;
+								processCASbits(cas_type, @6, "PRIMARY KEY",
+												&n->deferrable, &n->initdeferred, &n->skip_validation,
+												NULL, yyscanner);
+								n->initially_valid = !n->skip_validation;
+								n->isdisable = true;
+								n->inforConstraint = (InformationalConstraint *) $7;
+								$$ = (Node *)n;
+							}
+					;
 
 identity_seed_increment:
                        '(' NumericOnly ',' NumericOnly ')'
@@ -472,6 +618,7 @@ unreserved_keyword:
 			| NO_INFOMSGS
 			| NORESEED
 			| RESEED
+			| TSQL_COLUMNSTORE
 			| TSQL_CLUSTERED
 			| TSQL_NONCLUSTERED
 			| TSQL_NOLOCK
@@ -485,7 +632,10 @@ unreserved_keyword:
 			| TSQL_ROWLOCK
 			| TSQL_READPAST
 			| TSQL_XLOCK
-			| TSQL_NOEXPAND ;
+			| TSQL_NOEXPAND
+			| TSQL_PROC 
+			| TSQL_MINUTES_P
+			| TSQL_TEXTIMAGE_ON ;
 
 
 DBCCCheckIdentStmt:
@@ -724,7 +874,7 @@ TSQL_DoStmt: DO dostmt_opt_list
 
 ConstraintElem:
 			tsql_unique_clustered '(' constraint_params ')' opt_c_include opt_definition opt_table_index_options
-				ConstraintAttributeSpec InformationalConstraintElem
+				ConstraintAttributeSpec InformationalConstraintElem OptFileGroup
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_UNIQUE;
@@ -746,7 +896,7 @@ ConstraintElem:
 					$$ = (Node *)n;
 				}
 				| tsql_primary_key_clustered '(' constraint_params ')' opt_c_include opt_definition opt_table_index_options
-				ConstraintAttributeSpec InformationalConstraintElem
+				ConstraintAttributeSpec InformationalConstraintElem OptFileGroup
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_PRIMARY;
@@ -767,7 +917,95 @@ ConstraintElem:
 					setAccessMethod(n);
 					$$ = (Node *)n;
 				}
-		;
+				| UNIQUE '(' constraint_params ')' opt_c_include opt_definition OptConsTableSpace opt_table_index_options
+				ConstraintAttributeSpec InformationalConstraintElem FileGroup
+				{
+					Constraint *n = makeNode(Constraint);
+					n->contype = CONSTR_UNIQUE;
+					n->location = @1;
+					n->keys = $3;
+					n->including = $5;
+					n->options = $6;
+					n->indexname = NULL;
+					n->indexspace = $7;
+					n->constraintOptions = $8;
+					processCASbits($9, @9, "UNIQUE",
+								   &n->deferrable, &n->initdeferred, &n->skip_validation,
+								   NULL, yyscanner);
+					n->inforConstraint = (InformationalConstraint *) $10; /* informational constraint info */
+					n->initially_valid = !n->skip_validation;
+					if ($9 & (CAS_DISABLE_VALIDATE | CAS_DISABLE_NO_VALIDATE))
+						n->isdisable = true;
+					setAccessMethod(n);
+					$$ = (Node *)n;
+				}
+				| UNIQUE '(' constraint_params ')' opt_c_include opt_definition opt_table_index_options
+					ConstraintAttributeSpec InformationalConstraintElem FileGroup
+					{
+						Constraint *n = makeNode(Constraint);
+						n->contype = CONSTR_UNIQUE;
+						n->location = @1;
+						n->keys = $3;
+						n->including = $5;
+						n->options = $6;
+						n->indexname = NULL;
+						n->indexspace = NULL;
+						n->constraintOptions = $7;
+						processCASbits($8, @8, "UNIQUE",
+									&n->deferrable, &n->initdeferred, &n->skip_validation,
+									NULL, yyscanner);
+						n->inforConstraint = (InformationalConstraint *) $9; /* informational constraint info */
+						n->initially_valid = !n->skip_validation;
+						if ($8 & (CAS_DISABLE_VALIDATE | CAS_DISABLE_NO_VALIDATE))
+							n->isdisable = true;
+						setAccessMethod(n);
+						$$ = (Node *)n;
+					}
+				| PRIMARY KEY '(' constraint_params ')' opt_c_include opt_definition OptConsTableSpace opt_table_index_options
+					ConstraintAttributeSpec InformationalConstraintElem FileGroup
+					{
+						Constraint *n = makeNode(Constraint);
+						n->contype = CONSTR_PRIMARY;
+						n->location = @1;
+						n->keys = $4;
+						n->including = $6;
+						n->options = $7;
+						n->indexname = NULL;
+						n->indexspace = $8;
+						n->constraintOptions = $9;
+						processCASbits($10, @10, "PRIMARY KEY",
+									&n->deferrable, &n->initdeferred, &n->skip_validation,
+									NULL, yyscanner);
+						n->inforConstraint = (InformationalConstraint *) $11; /* informational constraint info */
+						n->initially_valid = !n->skip_validation;
+						if ($10 & (CAS_DISABLE_VALIDATE | CAS_DISABLE_NO_VALIDATE))
+							n->isdisable = true;
+						setAccessMethod(n);
+						$$ = (Node *)n;
+					}
+				| PRIMARY KEY '(' constraint_params ')' opt_c_include opt_definition opt_table_index_options
+					ConstraintAttributeSpec InformationalConstraintElem FileGroup
+					{
+						Constraint *n = makeNode(Constraint);
+						n->contype = CONSTR_PRIMARY;
+						n->location = @1;
+						n->keys = $4;
+						n->including = $6;
+						n->options = $7;
+						n->indexname = NULL;
+						n->indexspace = NULL;
+						n->constraintOptions = $8;
+						processCASbits($9, @9, "PRIMARY KEY",
+									&n->deferrable, &n->initdeferred, &n->skip_validation,
+									NULL, yyscanner);
+						n->inforConstraint = (InformationalConstraint *) $10; /* informational constraint info */
+						n->initially_valid = !n->skip_validation;
+						if ($9 & (CAS_DISABLE_VALIDATE | CAS_DISABLE_NO_VALIDATE))
+							n->isdisable = true;
+						setAccessMethod(n);
+						$$ = (Node *)n;
+					}
+			;
 
 tsql_stmt :
 			AlterAppWorkloadGroupMappingStmt
@@ -956,6 +1194,7 @@ tsql_stmt :
 			| TruncateStmt
 			| UnlistenStmt
 			| UpdateStmt
+			| tsql_UseStmt
 			| VacuumStmt
 			| VariableResetStmt
 			| VariableSetStmt
@@ -1498,3 +1737,227 @@ table_ref:
 					$$ = (Node *) n;
 				}
 		;
+
+AlterProcedureStmt:
+			ALTER TSQL_PROC function_with_argtypes alterfunc_opt_list opt_restrict
+				{
+					AlterFunctionStmt *n = makeNode(AlterFunctionStmt);
+					n->isProcedure = true;
+					n->func = $3;
+					n->actions = $4;
+					$$ = (Node *) n;
+				}
+		;
+
+RenameStmt:
+				ALTER TSQL_PROC function_with_argtypes RENAME TO name
+				{
+					RenameStmt *n = makeNode(RenameStmt);
+					n->renameType = OBJECT_FUNCTION;
+					n->object = $3->funcname;
+					n->objarg = $3->funcargs;
+					n->newname = $6;
+					n->missing_ok = false;
+					$$ = (Node *)n;
+				}
+		;
+
+AlterObjectSchemaStmt:
+				ALTER TSQL_PROC function_with_argtypes SET SCHEMA name
+				{
+					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
+					n->objectType = OBJECT_FUNCTION;
+					n->object = $3->funcname;
+					n->objarg = $3->funcargs;
+					n->newschema = $6;
+					n->missing_ok = false;
+					$$ = (Node *)n;
+				}
+		;
+
+AlterOwnerStmt:
+				ALTER TSQL_PROC function_with_argtypes OWNER TO RoleId
+				{
+					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
+					n->objectType = OBJECT_FUNCTION;
+					n->object = $3->funcname;
+					n->objarg = $3->funcargs;
+					n->newowner = $6;
+					$$ = (Node *)n;
+				}
+
+CompileStmt:
+				ALTER TSQL_PROC function_with_argtypes COMPILE
+				{
+					u_sess->plsql_cxt.during_compile = true;
+					CompileStmt *n = makeNode(CompileStmt);
+					if (enable_plpgsql_gsdependency_guc()) {
+						n->objName = ((FuncWithArgs*)$3)->funcname;
+						n->funcArgs = ((FuncWithArgs*)$3)->funcargs;
+						n->compileItem = COMPILE_PROCEDURE;
+					}
+					$$ = (Node*)n;
+				}
+				| ALTER TSQL_PROC func_name_opt_arg COMPILE
+				{
+					u_sess->plsql_cxt.during_compile = true;
+					CompileStmt *n = makeNode(CompileStmt);
+					if (enable_plpgsql_gsdependency_guc()) {
+						n->objName = $3;
+						n->funcArgs = NULL;
+						n->compileItem = COMPILE_PROCEDURE;
+					}
+					$$ = (Node*)n;
+				}
+		;
+
+RemoveFuncStmt:
+            DROP TSQL_PROC func_name func_args opt_drop_behavior
+                {
+                    DropStmt *n = makeNode(DropStmt);
+                    n->removeType = OBJECT_FUNCTION;
+                    n->objects = list_make1($3);
+                    n->arguments = list_make1(extractArgTypes($4));
+                    n->behavior = $5;
+                    n->missing_ok = false;
+                    n->concurrent = false;
+                    n->isProcedure = true;
+                    $$ = (Node *)n;
+                }
+            | DROP TSQL_PROC IF_P EXISTS func_name func_args opt_drop_behavior
+                {
+                    DropStmt *n = makeNode(DropStmt);
+                    n->removeType = OBJECT_FUNCTION;
+                    n->objects = list_make1($5);
+                    n->arguments = list_make1(extractArgTypes($6));
+                    n->behavior = $7;
+                    n->missing_ok = true;
+                    n->concurrent = false;
+                    n->isProcedure = true;
+                    $$ = (Node *)n;
+                }
+			| DROP TSQL_PROC func_name_opt_arg
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FUNCTION;
+					n->objects = list_make1($3);
+					n->arguments = NULL;
+					n->behavior = DROP_RESTRICT;
+					n->missing_ok = false;
+					n->concurrent = false;
+					n->isProcedure = true;
+					$$ = (Node *)n;
+				}
+			| DROP TSQL_PROC IF_P EXISTS func_name_opt_arg
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FUNCTION;
+					n->objects = list_make1($5);
+					n->arguments = NULL;
+					n->behavior = DROP_RESTRICT;
+					n->missing_ok = true;
+					n->concurrent = false;
+					n->isProcedure = true;
+					$$ = (Node *)n;
+				}
+		;
+
+/*
+ * NOTE: the OptFileGroup production doesn't really belong here. We accept OptFileGroup
+ *       for TSQL compatibility, but that syntax is used to place a table on
+ *       a filegroup (analogous to a tablespace).  For now, we just accept the
+ *       filegroup specification and ignore it. This makes it impossible to
+ *       write an ON COMMIT option and an ON filegroup clause in the same
+ *       statement, but that would be illegal syntax anyway.
+ */
+OnCommitOption:
+            FileGroup                    { $$ = ONCOMMIT_NOOP; }
+			| TextFileGroup              { $$ = ONCOMMIT_NOOP; }
+			| FileGroup TextFileGroup    { $$ = ONCOMMIT_NOOP; }
+
+FileGroup:
+            ON filegroupname {}
+		;
+
+TextFileGroup:
+            TSQL_TEXTIMAGE_ON filegroupname {}
+		;
+
+filegroupname:
+            file_group_name              
+			| '[' file_group_name ']'
+			| SCONST
+		;
+
+file_group_name:	IDENT
+				{
+					$$ = IdentResolveToChar($1, yyscanner);
+				}
+			| unreserved_keyword					{ $$ = pstrdup($1); }
+			| col_name_keyword						{ $$ = pstrdup($1); }
+			| type_func_name_keyword				{ $$ = pstrdup($1); }
+			| reserved_keyword                      { $$ = pstrdup($1); }
+		;
+
+
+
+OptFileGroup: FileGroup
+              | /*EMPTY*/
+
+tsql_UseStmt:
+			USE_P ColId
+				{
+                    char *curDbName = NULL;
+                    curDbName = get_database_name(u_sess->proc_cxt.MyDatabaseId);
+                    if (pg_strcasecmp(curDbName, $2) != 0) {
+                        ereport(ERROR,
+                            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                    			errmsg("Use of non-current database '%s' is not supported.", $2)));
+                    } else {
+                        ereport(NOTICE, (errmsg("Already connected to database '%s'.", $2)));
+
+                        // set a virtual value and nothing to do
+                        VariableSetStmt *n = makeNode(VariableSetStmt);
+                        n->kind = VAR_SET_VALUE;
+                        n->name = "_d_virtual_value";
+                        n->args = list_make1(makeStringConst("_d_virtual_value", -1));
+                        n->is_local = false;
+                        $$ = (Node *) n;
+                    }
+                }
+            ;
+
+def_elem:   ColLabel '=' ROW
+				{
+					$$ = makeDefElem($1, (Node *) makeString(pstrdup($3)));
+				}
+			| ColLabel '=' NONE
+				{
+					$$ = makeDefElem($1, (Node *) makeString(pstrdup($3)));
+				}
+			| tsql_with_compression_delay_minutes
+			    {
+                    $$ = $1;
+			    }
+		    ;
+
+tsql_with_compression_delay_minutes: ColLabel '=' tsql_UnsignedNumericOnly tsql_minutes_options
+			    {
+					if (pg_strcasecmp($1, "compression_delay") == 0) {
+						$$ = makeDefElem($1, (Node *)$3);
+					} else {
+						ereport(ERROR,
+						    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						        errmsg("The %s option with minute unit is currently not supported", $1)));
+					}
+				}
+			;
+tsql_minutes_options:   MINUTE_P
+                        | TSQL_MINUTES_P
+		            ;
+
+tsql_UnsignedNumericOnly:   Iconst								{ $$ = makeInteger($1); }
+                            | FCONST                            { $$ = makeFloat($1); }
+
+
+

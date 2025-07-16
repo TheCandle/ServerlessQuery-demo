@@ -1,3 +1,4 @@
+#include "commands/dbcommands.h"
 static void pgtsql_base_yyerror(YYLTYPE * yylloc, core_yyscan_t yyscanner, const char *msg);
 List *TsqlSystemFuncName2(char *name);
 static List* make_no_reseed_func(char* table_name, bool with_no_msgs, bool reseed_to_max);
