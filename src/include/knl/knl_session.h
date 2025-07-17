@@ -1502,6 +1502,7 @@ typedef struct knl_u_xact_context {
     char* savePrepareGID;
 
     bool pbe_execute_complete;
+    bool commit_pending;
     List *sendSeqDbName;
     List *sendSeqSchmaName;
     List *sendSeqName;
