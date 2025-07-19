@@ -1494,6 +1494,7 @@ int128 nextval_internal(Oid relid)
     Relation seqrel;
     int128 result;
     bool is_use_local_seq = false;
+    char* relname = NULL;
 
     if (t_thrd.postmaster_cxt.HaShmData->current_mode == STANDBY_MODE) {
         ereport(ERROR, (errmsg("Standby do not support nextval, please do it in primary!")));
@@ -1525,8 +1526,8 @@ int128 nextval_internal(Oid relid)
         elm->last += elm->increment;
         char* buf_last = DatumGetCString(DirectFunctionCall1(int16out, Int128GetDatum(elm->last)));
         char* buf_cached = DatumGetCString(DirectFunctionCall1(int16out, Int128GetDatum(elm->cached)));
-
-        if (u_sess->hook_cxt.invokeNextvalHook) {
+        if (u_sess->hook_cxt.invokeNextvalHook && (relname = get_rel_name(relid)) != NULL &&
+            StrEndWith(relname, "_seq_identity")) {
             ((InvokeNextvalHookType)(u_sess->hook_cxt.invokeNextvalHook))(elm->relid, elm->last);
         }
         ereport(DEBUG2,
@@ -1556,7 +1557,8 @@ int128 nextval_internal(Oid relid)
     }
 
     u_sess->cmd_cxt.last_used_seq = elm;
-    if (u_sess->hook_cxt.invokeNextvalHook) {
+    if (u_sess->hook_cxt.invokeNextvalHook && (relname = get_rel_name(relid)) != NULL &&
+        StrEndWith(relname, "_seq_identity")) {
         ((InvokeNextvalHookType)(u_sess->hook_cxt.invokeNextvalHook))(elm->relid, result);
     }
     char* buf = DatumGetCString(DirectFunctionCall1(int16out, Int128GetDatum(result)));
