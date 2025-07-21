@@ -647,3 +647,39 @@ reset search_path;
 drop schema test_ident_current;
 
 drop schema functions_test cascade;
+
+-- test datefuncs
+--test dateadd
+select dateadd(hh,1,timestamp'1997-12-31 23:59:59');
+select dateadd(dd,1,timestamp'1997-12-31 23:59:59');
+select dateadd(mm,1,timestamp'1997-12-31 23:59:59');
+select dateadd(yy,1,timestamp'1997-12-31 23:59:59');
+select dateadd(qq,1,timestamp'1997-12-31 23:59:59');
+select dateadd(ww,1,timestamptz'1997-12-31 23:59:59');
+select dateadd(mi,1,timestamptz'1997-12-31 23:59:59');
+select dateadd(ss,1,timestamp'1997-12-31 23:59:59');
+select dateadd(ms,1,timestamp'1997-12-31 23:59:59');
+select dateadd(mcs,1,timestamp'1997-12-31 23:59:59');
+select dateadd(mcs,999999,timestamp'1997-12-31 23:59:59.000002');
+select dateadd(mm,1,date'1998-01-30');
+select dateadd(dd,2,time'23:20:20');
+select dateadd(dd,3,timetz '23:20:20');
+select dateadd(dy,2,time'23:20:20');
+select dateadd(dw,2,time'23:20:20');
+select dateadd(yy,2,time'23:20:20');
+select dateadd(mm,2,time'23:20:20');
+
+select dateadd('',1,'2023/3/31');
+select dateadd(2022,3,'2023/3/31 11:25:35.123456789');
+
+drop table t;
+create table t(id timestamp, id1 int,id2 int);
+insert into t values(timestamp'1997-12-11',1,2);
+select dateadd(dd,t.id1,id)from t;
+select dateadd(mm,t.id1,id)from t;
+select dateadd(dd,id1+id1,id)from t;
+select dateadd(dd,id1+id1+id2,id)from t;
+select dateadd(dd,id1+id1+(id2 -id2),id)from t;
+select dateadd(dd,(id1+id1+(id2 -id2)),id)from t;
+select dateadd(dd,id1,id)from t;
+drop table t;

@@ -292,3 +292,8 @@ drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN
 drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.dateadd(cstring,integer,date);
+drop function if exists sys.dateadd(cstring,integer,timestamp without time zone);
+drop function if exists sys.dateadd(cstring,integer,timestamp with time zone);
+drop function if exists sys.dateadd(cstring,integer,time without time zone);
+drop function if exists sys.dateadd(cstring,integer,time with time zone);

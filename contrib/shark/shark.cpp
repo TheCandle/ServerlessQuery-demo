@@ -63,7 +63,9 @@ static int64 int64_nano_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fsec1,
 #define DTK_NANO 32
 
 void _PG_init(void)
-{}
+{
+    InitIntervalLookup();
+}
 
 static bool CheckIsMssqlHex(char *str)
 {

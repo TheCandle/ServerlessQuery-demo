@@ -1,0 +1,494 @@
+/*
+ * Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ *
+ * openGauss is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ * --------------------------------------------------------------------------------------
+ *
+ * datefuns.cpp
+ *
+ * IDENTIFICATION
+ *        contrib/shark/datefuncs.cpp
+ *
+ * --------------------------------------------------------------------------------------
+ */
+#include "postgres.h"
+#include "knl/knl_variable.h"
+
+#include <cctype>
+#include <cfloat>
+#include <climits>
+#include <cmath>
+#include "catalog/pg_type.h"
+#include "utils/builtins.h"
+#include "utils/date.h"
+#include "utils/numeric.h"
+#include "utils/timestamp.h"
+#include "utils/datetime.h"
+#include "utils/memutils.h"
+#include "libpq/pqformat.h"
+#include "parser/scansup.h"
+#include "common/int.h"
+#include "miscadmin.h"
+#include "access/xact.h"
+#include "shark.h"
+
+#define MAX_NANO_SECOND 1000000000
+#define MAX_MICRO_SECOND 1000000
+#define INTERVAL_NUM 35
+#define INTERVAL_KEY_SIZE 16
+
+static HTAB *IntervalHash = NULL;
+extern "C" Datum dateaddtimestamp(PG_FUNCTION_ARGS);
+extern "C" Datum dateaddtimestamptz(PG_FUNCTION_ARGS);
+extern "C" Datum dateadddate(PG_FUNCTION_ARGS);
+extern "C" Datum dateaddtime(PG_FUNCTION_ARGS);
+extern "C" Datum dateaddtimetz(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(dateaddtimestamp);
+PG_FUNCTION_INFO_V1(dateaddtimestamptz);
+PG_FUNCTION_INFO_V1(dateadddate);
+PG_FUNCTION_INFO_V1(dateaddtime);
+PG_FUNCTION_INFO_V1(dateaddtimetz);
+
+typedef struct DataInfo {
+    unsigned long year = 0;
+    unsigned long month = 0;
+    unsigned long day = 0;
+    unsigned long hour = 0;
+    unsigned long long minute = 0;
+    unsigned long long second = 0;
+    unsigned long long secondPart = 0;
+    bool isNegativeNumber = false;
+} DataInfo;
+
+enum IntervalExprType {
+    IET_YEAR,
+    IET_QUARTER,
+    IET_MONTH,
+    IET_WEEK,
+    IET_DAY,
+    IET_HOUR,
+    IET_MINUTE,
+    IET_SECOND,
+    IET_MILLISECOND,
+    IET_MICROSECOND,
+    IET_NANOSECOND,
+    IET_YEAR_MONTH,
+    IET_DAY_HOUR,
+    IET_DAY_MINUTE,
+    IET_DAY_SECOND,
+    IET_HOUR_MINUTE,
+    IET_HOUR_SECOND,
+    IET_MINUTE_SECOND,
+    IET_DAY_MICROSECOND,
+    IET_HOUR_MICROSECOND,
+    IET_MINUTE_MICROSECOND,
+    IET_SECOND_MICROSECOND
+};
+
+typedef struct {
+    char key[INTERVAL_KEY_SIZE];
+    IntervalExprType type;
+    int yearTimes;
+    int monthTimes;
+    int dayTimes;
+    int hourTimes;
+    int minuteTimes;
+    int secondTimes;
+    double secondPartTimes;
+} IntervalEntry;
+
+typedef struct {
+    char key[INTERVAL_KEY_SIZE];
+    void *valuePointer;
+} IntervalKey;
+
+static const IntervalEntry IntervalMap[] = {
+    {"yy",           IET_YEAR,         1, 0, 0, 0, 0, 0, 0},
+    {"yyyy",         IET_YEAR,         1, 0, 0, 0, 0, 0, 0},
+    {"year",         IET_YEAR,         1, 0, 0, 0, 0, 0, 0},
+    {"q",            IET_QUARTER,      0, 3, 0, 0, 0, 0, 0},
+    {"qq",           IET_QUARTER,      0, 3, 0, 0, 0, 0, 0},
+    {"quarter",      IET_QUARTER,      0, 3, 0, 0, 0, 0, 0},
+    {"m",            IET_MONTH,        0, 1, 0, 0, 0, 0, 0},
+    {"mm",           IET_MONTH,        0, 1, 0, 0, 0, 0, 0},
+    {"month",        IET_MONTH,        0, 1, 0, 0, 0, 0, 0},
+    {"wk",           IET_WEEK,         0, 0, 7, 0, 0, 0, 0},
+    {"ww",           IET_WEEK,         0, 0, 7, 0, 0, 0, 0},
+    {"week",         IET_WEEK,         0, 0, 7, 0, 0, 0, 0},
+    {"dy",           IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"y",            IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"dayofyear",    IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"dd",           IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"d",            IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"day",          IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"dw",           IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"w",            IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"weekday",      IET_DAY,          0, 0, 1, 0, 0, 0, 0},
+    {"hh",           IET_HOUR,         0, 0, 0, 1, 0, 0, 0},
+    {"hour",         IET_HOUR,         0, 0, 0, 1, 0, 0, 0},
+    {"mi",           IET_MINUTE,       0, 0, 0, 0, 1, 0, 0},
+    {"n",            IET_MINUTE,       0, 0, 0, 0, 1, 0, 0},
+    {"minute",       IET_MINUTE,       0, 0, 0, 0, 1, 0, 0},
+    {"ss",           IET_SECOND,       0, 0, 0, 0, 0, 1, 0},
+    {"s",            IET_SECOND,       0, 0, 0, 0, 0, 1, 0},
+    {"second",       IET_SECOND,       0, 0, 0, 0, 0, 1, 0},
+    {"ms",           IET_MILLISECOND,  0, 0, 0, 0, 0, 0, 1000},
+    {"millisecond",  IET_MILLISECOND,  0, 0, 0, 0, 0, 0, 1000},
+    {"mcs",          IET_MICROSECOND,  0, 0, 0, 0, 0, 0, 1},
+    {"microsecond",  IET_MICROSECOND,  0, 0, 0, 0, 0, 0, 1},
+    {"ns",           IET_NANOSECOND,   0, 0, 0, 0, 0, 0, 0.001},
+    {"nanosecond",   IET_NANOSECOND,   0, 0, 0, 0, 0, 0, 0.001},
+};
+
+static void InitIntervalHash(void)
+{
+    HASHCTL ctl;
+    MemSet(&ctl, 0, sizeof(ctl));
+    ctl.keysize   = INTERVAL_KEY_SIZE;
+    ctl.entrysize = sizeof(IntervalKey);
+    ctl.hash      = string_hash;
+
+    IntervalHash = hash_create("IntervalKeywordHash",
+                               INTERVAL_NUM,
+                               &ctl,
+                               HASH_ELEM | HASH_FUNCTION);
+}
+
+static void PopulateHash(void)
+{
+    bool found;
+    for (size_t i = 0; i < sizeof(IntervalMap) / sizeof(IntervalMap[0]); ++i) {
+        IntervalKey *k = (IntervalKey *)hash_search(
+            IntervalHash, IntervalMap[i].key, HASH_ENTER, &found);
+
+        if (!found) {
+            strlcpy(k->key, IntervalMap[i].key, INTERVAL_KEY_SIZE);
+            k->valuePointer = (void *)&IntervalMap[i];
+        }
+    }
+}
+
+void InitIntervalLookup(void)
+{
+    if (!IntervalHash) {
+        InitIntervalHash();
+        PopulateHash();
+    }
+}
+
+static inline const IntervalEntry *FindInterval(const char *key)
+{
+    IntervalKey *vp = (IntervalKey *)hash_search(IntervalHash, (void *)key, HASH_FIND, NULL);
+    if (!vp) {
+        return NULL;
+    }
+
+    return (IntervalEntry*)(vp->valuePointer);
+}
+
+void GetIntervalTypeDateMs(char* args, const int inter, DataInfo *info, int* intervalType)
+{
+    char* arg = pg_strtolower(args);
+    long long value = inter;
+    info->year = 0;
+    *intervalType = -1;
+
+    const IntervalEntry *m = FindInterval(arg);
+    if (!m) {
+        ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+            errmsg("unrecognized role option \"%s\"", arg)));
+    }
+
+    *intervalType = m->type;
+    info->year += value * m->yearTimes;
+    info->month += value * m->monthTimes;
+    info->day += value * m->dayTimes;
+    info->hour += value * m->hourTimes;
+    info->minute += value * m->minuteTimes;
+    info->second += value * m->secondTimes;
+    info->secondPart += value * m->secondPartTimes;
+
+    if (value < 0) {
+        info->isNegativeNumber = true;
+    }
+}
+
+void get_datainfo_interval(int intervalType, DataInfo* info, Interval* intervalValue)
+{
+    switch (intervalType) {
+        case IET_SECOND_MICROSECOND:
+        case IET_MINUTE_MICROSECOND:
+        case IET_HOUR_MICROSECOND:
+        case IET_DAY_MICROSECOND:
+        case IET_MICROSECOND:
+        case IET_MILLISECOND:
+        case IET_NANOSECOND: {
+            long secs;
+            long microsecs;
+            intervalValue->day = info->day;
+#ifdef HAVE_INT64_TIMESTAMP
+            secs = (long)(info->secondPart / USECS_PER_SEC);
+            microsecs = (long)(info->secondPart % USECS_PER_SEC);
+            intervalValue->time =
+            (((((info->hour * MINS_PER_HOUR) + info->minute) * SECS_PER_MINUTE) + info->second + secs)* USECS_PER_SEC)
+            + microsecs;
+#else
+            secs = (long)info->secondPart;
+            microsecs = (long)((info->secondPart - secs) * 1000000.0);
+            intervalValue->time =
+                       (((info->hour * (double)MINS_PER_HOUR) + info->minute) * (double)SECS_PER_MINUTE)
+                       + info->second + secs + microsecs;
+#endif
+            break;
+        }
+        case IET_SECOND:
+        case IET_MINUTE:
+        case IET_HOUR:
+        case IET_MINUTE_SECOND:
+        case IET_HOUR_SECOND:
+        case IET_HOUR_MINUTE: {
+#ifdef HAVE_INT64_TIMESTAMP
+            intervalValue->time =
+                  (((((info->hour * MINS_PER_HOUR) + info->minute) * SECS_PER_MINUTE) + info->second) * USECS_PER_SEC);
+#else
+            intervalValue->time =
+                  (((info->hour * (double)MINS_PER_HOUR) + info->minute) * (double)SECS_PER_MINUTE) + info->second;
+#endif
+            break;
+        }
+        case IET_DAY:
+        case IET_WEEK: {
+            intervalValue->day = info->day;
+            break;
+        }
+        case IET_DAY_SECOND:
+        case IET_DAY_MINUTE:
+        case IET_DAY_HOUR: {
+            intervalValue->day = info->day;
+#ifdef HAVE_INT64_TIMESTAMP
+            intervalValue->time =
+                (((((info->hour * MINS_PER_HOUR) + info->minute) * SECS_PER_MINUTE) + info->second) * USECS_PER_SEC);
+#else
+            intervalValue->time =
+                (((info->hour * (double)MINS_PER_HOUR) + info->minute) * (double)SECS_PER_MINUTE) + info->second;
+#endif
+            break;
+        }
+        case IET_YEAR:
+        case IET_YEAR_MONTH:
+        case IET_QUARTER:
+        case IET_MONTH: {
+            intervalValue->month = (info->year * MONTHS_PER_YEAR + info->month +info->secondPart);
+            break;
+        }
+        default:
+            ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+                errmsg("unrecognized role option")));
+    }
+    return;
+}
+
+void date_add(pg_tm *tm, fsec_t *fsec, int intervalType, DataInfo* info)
+{
+    long long secondPart = *fsec;
+    long sign = (info->isNegativeNumber ? -1 : 1);
+
+    switch (intervalType) {
+        case IET_SECOND:
+        case IET_SECOND_MICROSECOND:
+        case IET_MICROSECOND:
+        case IET_MINUTE:
+        case IET_HOUR:
+        case IET_MINUTE_MICROSECOND:
+        case IET_MINUTE_SECOND:
+        case IET_HOUR_SECOND:
+        case IET_HOUR_MINUTE:
+        case IET_HOUR_MICROSECOND:
+        case IET_DAY_MICROSECOND:
+        case IET_DAY_SECOND:
+        case IET_DAY_MINUTE:
+        case IET_DAY_HOUR:
+        case IET_DAY:
+        case IET_WEEK:
+        case IET_MILLISECOND:
+        case IET_NANOSECOND: {
+            long long microseconds;
+            long long extractSecond;
+            long long second;
+            long long days;
+
+            microseconds = secondPart + sign * info->secondPart;
+            extractSecond = microseconds / 1000000L;
+            microseconds = microseconds % 1000000L;
+
+            second = ((tm->tm_mday) * SECS_PER_HOUR * 24L + tm->tm_hour * SECS_PER_HOUR +
+                tm->tm_min * SECS_PER_MINUTE + tm->tm_sec + sign * (long long)(info->day *
+                    SECS_PER_HOUR * 24L + info->hour * 3600LL + info->minute * 60LL +
+                    info->second)) + extractSecond;
+            if (microseconds < 0) {
+                microseconds += 1000000LL;
+                second--;
+            }
+            *fsec = microseconds;
+            days = second / (SECS_PER_HOUR * HOURS_PER_DAY);
+            second -= days * SECS_PER_HOUR * HOURS_PER_DAY;
+            if (second < 0) {
+                days--;
+                second += SECS_PER_HOUR * HOURS_PER_DAY;
+            }
+            tm->tm_mday = days;
+            tm->tm_hour = second / SECS_PER_HOUR;
+            tm->tm_min = second / MINS_PER_HOUR % SECS_PER_MINUTE;
+            tm->tm_sec = second % SECS_PER_MINUTE;
+            break;
+        }
+        case IET_YEAR: {
+            tm->tm_year += sign * info->year;
+            if (isleap(tm->tm_year) && tm->tm_mon == 2 && tm->tm_mday == 29) {
+                tm->tm_mday = 28;
+            }
+            break;
+        }
+        case IET_YEAR_MONTH:
+        case IET_QUARTER:
+        case IET_MONTH: {
+            long long months = sign * info->year * MONTHS_PER_YEAR + sign * info->month;
+            tm->tm_mon += months;
+            if (tm->tm_mon > MONTHS_PER_YEAR) {
+                tm->tm_year += (tm->tm_mon - 1) / MONTHS_PER_YEAR;
+                tm->tm_mon = ((tm->tm_mon - 1) % MONTHS_PER_YEAR) + 1;
+            } else if (tm->tm_mon < 1) {
+                tm->tm_year += tm->tm_mon / MONTHS_PER_YEAR - 1;
+                tm->tm_mon = tm->tm_mon % MONTHS_PER_YEAR + MONTHS_PER_YEAR;
+            }
+
+            if (tm->tm_mday > day_tab[isleap(tm->tm_year)][tm->tm_mon - 1]) {
+                tm->tm_mday = (day_tab[isleap(tm->tm_year)][tm->tm_mon - 1]);
+            }
+            break;
+        }
+        default:
+            ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+                errmsg("unrecognized role option")));
+    }
+}
+
+Interval GetDateSpan(char* args, const int inter)
+{
+    DataInfo info;
+    int intervalType = -1;
+    Interval span;
+    span.day = 0;
+    span.month = 0;
+    span.time = 0;
+
+    GetIntervalTypeDateMs(args, inter, &info, &intervalType);
+    get_datainfo_interval(intervalType, &info, &span);
+    return span;
+}
+
+Datum dateaddtimestamp(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal = PG_GETARG_TIMESTAMP(2);
+    char* argdataNum = PG_GETARG_CSTRING(0);
+    int interval = PG_GETARG_INT32(1);
+    Timestamp restimestamp;
+
+    Interval span = GetDateSpan(argdataNum, interval);
+
+    restimestamp = timestamp_pl_interval(timestampVal, &span);
+    PG_RETURN_TIMESTAMP(restimestamp);
+}
+
+Datum dateaddtimestamptz(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestampVal = PG_GETARG_TIMESTAMPTZ(2);
+    char* argdataNum = PG_GETARG_CSTRING(0);
+    int interval = PG_GETARG_INT32(1);
+    TimestampTz restimestamptz;
+
+    Interval span = GetDateSpan(argdataNum, interval);
+
+    restimestamptz =
+           DirectFunctionCall2(timestamptz_pl_interval, TimestampGetDatum(timestampVal), PointerGetDatum(&span));
+    PG_RETURN_TIMESTAMP(restimestamptz);
+}
+
+Datum dateadddate(PG_FUNCTION_ARGS)
+{
+    DateADT dateVal = PG_GETARG_DATEADT(2);
+    char* argdataNum = PG_GETARG_CSTRING(0);
+    int interval = PG_GETARG_INT32(1);
+    Timestamp restimestamp;
+    Timestamp dateStamp = date2timestamp(dateVal);
+
+    Interval span = GetDateSpan(argdataNum, interval);
+
+    restimestamp = timestamp_pl_interval(dateStamp, &span);
+    PG_RETURN_TIMESTAMP(restimestamp);
+}
+
+void dateaddtime_internal(char* args, const int inter, pg_tm *tm, fsec_t *fsec)
+{
+    tm->tm_mday = 1;
+    tm->tm_mon = 1;
+    tm->tm_year = 1900;
+
+    DataInfo info;
+    int intervalType = -1;
+    GetIntervalTypeDateMs(args, inter, &info, &intervalType);
+    date_add(tm, fsec, intervalType, &info);
+}
+
+Datum dateaddtime(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal;
+    TimeADT time = PG_GETARG_TIMEADT(2);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec;
+    time2tm(time, tm, &fsec);
+
+    char* argdata = PG_GETARG_CSTRING(0);
+    int interval = PG_GETARG_INT32(1);
+
+    dateaddtime_internal(argdata, interval, tm, &fsec);
+
+    if (tm2timestamp(tm, fsec, NULL, &timestampVal) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    PG_RETURN_TIMESTAMP(timestampVal);
+}
+
+Datum dateaddtimetz(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestampVal;
+    TimeTzADT* time = PG_GETARG_TIMETZADT_P(2);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec;
+    int tz = 0;
+    timetz2tm(time, tm, &fsec, &tz);
+
+    char* argdata = PG_GETARG_CSTRING(0);
+    int interval = PG_GETARG_INT32(1);
+
+    dateaddtime_internal(argdata, interval, tm, &fsec);
+
+    if (tm2timestamp(tm, fsec, &tz, &timestampVal) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    PG_RETURN_TIMESTAMPTZ(timestampVal);
+}

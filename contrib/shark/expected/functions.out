@@ -1663,3 +1663,169 @@ NOTICE:  drop cascades to view v_employees
 reset search_path;
 drop schema test_ident_current;
 drop schema functions_test cascade;
+-- test datefuncs
+--test dateadd
+select dateadd(hh,1,timestamp'1997-12-31 23:59:59');
+         dateadd          
+--------------------------
+ Thu Jan 01 00:59:59 1998
+(1 row)
+
+select dateadd(dd,1,timestamp'1997-12-31 23:59:59');
+         dateadd          
+--------------------------
+ Thu Jan 01 23:59:59 1998
+(1 row)
+
+select dateadd(mm,1,timestamp'1997-12-31 23:59:59');
+         dateadd          
+--------------------------
+ Sat Jan 31 23:59:59 1998
+(1 row)
+
+select dateadd(yy,1,timestamp'1997-12-31 23:59:59');
+         dateadd          
+--------------------------
+ Thu Dec 31 23:59:59 1998
+(1 row)
+
+select dateadd(qq,1,timestamp'1997-12-31 23:59:59');
+         dateadd          
+--------------------------
+ Tue Mar 31 23:59:59 1998
+(1 row)
+
+select dateadd(ww,1,timestamptz'1997-12-31 23:59:59');
+           dateadd            
+------------------------------
+ Wed Jan 07 23:59:59 1998 PST
+(1 row)
+
+select dateadd(mi,1,timestamptz'1997-12-31 23:59:59');
+           dateadd            
+------------------------------
+ Thu Jan 01 00:00:59 1998 PST
+(1 row)
+
+select dateadd(ss,1,timestamp'1997-12-31 23:59:59');
+         dateadd          
+--------------------------
+ Thu Jan 01 00:00:00 1998
+(1 row)
+
+select dateadd(ms,1,timestamp'1997-12-31 23:59:59');
+           dateadd            
+------------------------------
+ Wed Dec 31 23:59:59.001 1997
+(1 row)
+
+select dateadd(mcs,1,timestamp'1997-12-31 23:59:59');
+             dateadd             
+---------------------------------
+ Wed Dec 31 23:59:59.000001 1997
+(1 row)
+
+select dateadd(mcs,999999,timestamp'1997-12-31 23:59:59.000002');
+             dateadd             
+---------------------------------
+ Thu Jan 01 00:00:00.000001 1998
+(1 row)
+
+select dateadd(mm,1,date'1998-01-30');
+         dateadd          
+--------------------------
+ Sat Feb 28 00:00:00 1998
+(1 row)
+
+select dateadd(dd,2,time'23:20:20');
+         dateadd          
+--------------------------
+ Wed Jan 03 23:20:20 1900
+(1 row)
+
+select dateadd(dd,3,timetz '23:20:20');
+           dateadd            
+------------------------------
+ Thu Jan 04 22:20:20 1900 PST
+(1 row)
+
+select dateadd(dy,2,time'23:20:20');
+         dateadd          
+--------------------------
+ Wed Jan 03 23:20:20 1900
+(1 row)
+
+select dateadd(dw,2,time'23:20:20');
+         dateadd          
+--------------------------
+ Wed Jan 03 23:20:20 1900
+(1 row)
+
+select dateadd(yy,2,time'23:20:20');
+         dateadd          
+--------------------------
+ Wed Jan 01 23:20:20 1902
+(1 row)
+
+select dateadd(mm,2,time'23:20:20');
+         dateadd          
+--------------------------
+ Thu Mar 01 23:20:20 1900
+(1 row)
+
+select dateadd('',1,'2023/3/31');
+ERROR:  unrecognized role option ""
+CONTEXT:  referenced column: dateadd
+select dateadd(2022,3,'2023/3/31 11:25:35.123456789');
+ERROR:  function dateadd(integer, integer, unknown) does not exist
+LINE 1: select dateadd(2022,3,'2023/3/31 11:25:35.123456789');
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  referenced column: dateadd
+drop table t;
+ERROR:  table "t" does not exist
+create table t(id timestamp, id1 int,id2 int);
+insert into t values(timestamp'1997-12-11',1,2);
+select dateadd(dd,t.id1,id)from t;
+         dateadd          
+--------------------------
+ Fri Dec 12 00:00:00 1997
+(1 row)
+
+select dateadd(mm,t.id1,id)from t;
+         dateadd          
+--------------------------
+ Sun Jan 11 00:00:00 1998
+(1 row)
+
+select dateadd(dd,id1+id1,id)from t;
+         dateadd          
+--------------------------
+ Sat Dec 13 00:00:00 1997
+(1 row)
+
+select dateadd(dd,id1+id1+id2,id)from t;
+         dateadd          
+--------------------------
+ Mon Dec 15 00:00:00 1997
+(1 row)
+
+select dateadd(dd,id1+id1+(id2 -id2),id)from t;
+         dateadd          
+--------------------------
+ Sat Dec 13 00:00:00 1997
+(1 row)
+
+select dateadd(dd,(id1+id1+(id2 -id2)),id)from t;
+         dateadd          
+--------------------------
+ Sat Dec 13 00:00:00 1997
+(1 row)
+
+select dateadd(dd,id1,id)from t;
+         dateadd          
+--------------------------
+ Fri Dec 12 00:00:00 1997
+(1 row)
+
+drop table t;

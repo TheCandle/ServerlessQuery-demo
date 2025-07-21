@@ -30,6 +30,7 @@ extern void PltsqlRevertLastScopeIdentity(int nestLevel);
 extern int128 last_scope_identity_value();
 extern char* GetPhysicalSchemaName(char *dbName, const char *schemaName);
 extern void AssignIdentitycmdsHook(void);
+extern void InitIntervalLookup(void);
 
 typedef struct SeqTableIdentityData {
     Oid relid;                /* pg_class OID of this sequence */

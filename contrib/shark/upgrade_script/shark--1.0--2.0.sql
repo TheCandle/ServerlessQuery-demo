@@ -2442,7 +2442,6 @@ returns numeric(38, 0) as $$
 $$
 language sql;
 
-
 CREATE TABLE sys.shark_syslanguages (
     lang_id SMALLINT,
     lang_name_pg VARCHAR(30),
@@ -6636,3 +6635,34 @@ END;
 $BODY$
 LANGUAGE plpgsql
 IMMUTABLE;
+
+-- date funcs
+CREATE OR REPLACE FUNCTION sys.dateadd(cstring,integer,date)
+RETURNS timestamp without time zone
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateadddate$function$;
+
+CREATE OR REPLACE FUNCTION sys.dateadd(cstring,integer,timestamp without time zone)
+RETURNS timestamp without time zone
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateaddtimestamp$function$;
+
+CREATE OR REPLACE FUNCTION sys.dateadd(cstring,integer,timestamp with time zone)
+RETURNS timestamp with time zone
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateaddtimestamptz$function$;
+
+CREATE OR REPLACE FUNCTION sys.dateadd(cstring,integer,time without time zone)
+RETURNS timestamp without time zone
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateaddtime$function$;
+
+CREATE OR REPLACE FUNCTION sys.dateadd(cstring,integer,time with time zone)
+RETURNS timestamp with time zone
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateaddtimetz$function$;
