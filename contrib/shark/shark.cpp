@@ -439,24 +439,19 @@ PG_FUNCTION_INFO_V1(get_scope_identity);
 Datum get_scope_identity(PG_FUNCTION_ARGS)
 {
     int128 res = 0;
-    bool success = false;
 
     PG_TRY();
     {
         res = last_scope_identity_value();
-        success = true;
     }
     PG_CATCH();
     {
         FlushErrorState();
+        PG_RETURN_NULL();
     }
     PG_END_TRY();
 
-    if (success) {
-        PG_RETURN_INT128(res);
-    }
-
-    PG_RETURN_NULL();
+    PG_RETURN_INT128(res);
 }
 
 PG_FUNCTION_INFO_V1(get_ident_current);
