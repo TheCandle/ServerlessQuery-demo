@@ -311,6 +311,11 @@ typedef struct RelationData {
 
     /* used only for datavec hnsw lsg */
     float* sampleVec;
+
+    /* used only for datavec diskann */
+    char *diskPQTableTransposed;
+    char *centroids;
+    uint32 *offsets;
 } RelationData;
 
 /*
@@ -904,4 +909,3 @@ extern void SetupPageCompressForRelation(RelFileNode* node, PageCompressOpts* co
 extern bool IsRelationReplidentKey(Relation r, int attno);
 
 #endif /* REL_H */
-
