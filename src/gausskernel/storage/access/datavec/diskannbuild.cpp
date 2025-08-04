@@ -91,7 +91,7 @@ static void InitBuildState(DiskAnnBuildState* buildstate, Relation heap, Relatio
     if (buildstate->enablePQ && !buildstate->typeInfo->supportPQ) {
         ereport(ERROR, (errmsg("this data type cannot support diskann pq.")));
     }
-    if (buildstate->enablePQ && !g_instance.pq_inited) {
+    if (buildstate->enablePQ && !g_instance.diskann_pq_inited) {
         ereport(ERROR, (errmsg("this instance has not currently loaded the pq dynamic library.")));
     }
 

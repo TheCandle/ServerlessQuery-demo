@@ -1108,6 +1108,7 @@ void knl_instance_init()
     knl_g_listen_sock_init(&g_instance.listen_cxt);
 
     g_instance.pq_inited = false;
+    g_instance.diskann_pq_inited = false;
 
 #ifdef USE_SPQ
     knl_g_spq_context_init(&g_instance.spq_cxt);

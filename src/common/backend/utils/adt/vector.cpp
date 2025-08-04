@@ -1908,12 +1908,5 @@ int PlanCreateIndexWorkers(Relation heapRelation, IndexInfo *indexInfo)
 
 double vector_square(float* x, int dim)
 {
-    double square = 0.0;
-
-    /* Auto-vectorized */
-    for (int i = 0; i < dim; i++) {
-        square += (double)x[i] * x[i];
-    }
-
-    return square;
+    return (double)VectorInnerProduct(dim, x, x);
 }

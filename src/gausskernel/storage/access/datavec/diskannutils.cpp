@@ -1148,16 +1148,16 @@ int DiskAnnPQInit()
     if (diskann_pq_func_init() != PQ_SUCCESS) {
         return PQ_ERROR;
     }
-    g_instance.pq_inited = true;
+    g_instance.diskann_pq_inited = true;
     return PQ_SUCCESS;
 }
 
 void DiskAnnPQUinit()
 {
-    if (!g_instance.pq_inited) {
+    if (!g_instance.diskann_pq_inited) {
         return;
     }
-    g_instance.pq_inited = false;
+    g_instance.diskann_pq_inited = false;
     ereport(LOG, (errmsg("datavec diskann PQ uninit")));
     if (g_diskann_pq_func.handle != NULL) {
         diskann_pq_close_dl(g_diskann_pq_func.handle);
@@ -1312,7 +1312,7 @@ DiskPQParams* InitDiskPQParamsOnDisk(Relation index, FmgrInfo *procinfo, int dim
     params->pqChunks = metap->pqM;
     UnlockReleaseBuffer(buf);
 
-    if (!g_instance.pq_inited) {
+    if (!g_instance.diskann_pq_inited) {
         ereport(ERROR, (errmsg("the SQL involves operations related to DiskPQ, "
                                "but this instance has not currently loaded the PQ dynamic library.")));
     }
