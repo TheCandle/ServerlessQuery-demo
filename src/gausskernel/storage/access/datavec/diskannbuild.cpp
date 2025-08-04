@@ -100,6 +100,12 @@ static void InitBuildState(DiskAnnBuildState* buildstate, Relation heap, Relatio
         if (buildstate->kmeansnormprocinfo != NULL && buildstate->dimensions == 1) {
             ereport(ERROR, (errmsg("dimensions must be greater than one for this opclass.")));
         }
+
+        if (buildstate->pqM > DISKANN_MAX_PQM) {
+            ereport(ERROR, (errmsg("pq_M={%d} exceeds max value {%d} for diskann index, please reset pq_M.",
+                                   buildstate->pqM, DISKANN_MAX_PQM)));
+        }
+
         if (buildstate->dimensions % buildstate->pqM != 0) {
             ereport(ERROR, (errmsg("dimensions={%d} must be divisible by pq_M={%d}, please reset pq_M.}",
                                    buildstate->dimensions, buildstate->pqM)));

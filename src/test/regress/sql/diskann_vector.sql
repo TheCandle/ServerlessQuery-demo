@@ -120,5 +120,14 @@ SELECT /*+ indexscan(diskann_t3 idx_vectors_t3_cosine) */ *
 FROM diskann_t3
 ORDER BY vector <-> '[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 ,14, 15, 16, 17, 18, 19, 20]' LIMIT 2;
 
+-- test max dimension
+CREATE TABLE diskann_t4
+(
+    id INT UNIQUE,
+    vector VECTOR(1537)
+);
+
+CREATE INDEX idx_vectors_t4_cosine ON diskann_t4 USING diskann(vector vector_cosine_ops);
+
 \c regression
 drop database test;
