@@ -1831,10 +1831,10 @@ ObjectAddress ProcedureCreate(const char* procedureName, Oid procNamespace, Oid 
      * To user-defined C_function, need rename library filename to special name,
      * Because exist concurrent to the same library, so need lock.
      */
-    AutoRWLock libraryLock(&g_dlerror_lock_rw);
+    AutoMutexLock libraryLock(&g_dllErrorLock);
 
     if (user_defined_c_fun) {
-        libraryLock.WrLock();
+        libraryLock.lock();
 
         if ((IS_PGXC_COORDINATOR && !IsConnFromCoord()) || IS_SINGLE_NODE) {
             /* Send library file to all node's $libdir/pg_plugin/ catalogue. */
@@ -1878,7 +1878,7 @@ ObjectAddress ProcedureCreate(const char* procedureName, Oid procNamespace, Oid 
         }
     }
     if (user_defined_c_fun) {
-        libraryLock.UnLock();
+        libraryLock.unLock();
     }
     if (enable_plpgsql_gsdependency_guc() && !OidIsValid(propackageid)) {
         if (u_sess->plsql_cxt.has_error) {

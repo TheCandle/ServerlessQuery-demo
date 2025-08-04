@@ -2708,6 +2708,7 @@ typedef struct knl_u_fmgr_context {
 
     struct df_files_init* file_init_tail;
 
+    HTAB* cFuncHash;
 } knl_u_fmgr_context;
 
 typedef struct knl_u_erand_context {
