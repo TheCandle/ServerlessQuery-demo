@@ -622,6 +622,7 @@ static double AssignTuples(DiskAnnBuildState* buildstate)
     /* End parallel build */
     if (buildstate->diskannleader) {
         DiskAnnEndParallel(buildstate->diskannleader);
+        buildstate->diskannleader = NULL;
     }
 
     return buildstate->reltuples;
@@ -675,7 +676,7 @@ static void BuildVamanaIndex(DiskAnnBuildState* buildstate)
         parallelWorkers = PlanCreateIndexWorkers(buildstate->heap, buildstate->indexInfo);
     }
 
-    if (parallelWorkers > 0) {
+    if (parallelWorkers > 1 && buildstate->blocksList.size() > parallelWorkers * buildstate->indexSize) {
         DiskAnnBeginParallel(buildstate, parallelWorkers, ParallelBuildFlag::LINK);
     }
 
