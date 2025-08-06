@@ -705,8 +705,19 @@ TSQL_CreateFunctionStmt:
 TSQL_DoStmt: DO dostmt_opt_list
 				{
 					DoStmt *n = makeNode(DoStmt);
+					bool with_language = false;
 					n->args = $2;
-					n->args = lappend(n->args, makeDefElem("language", (Node *)makeString("pltsql")));
+					ListCell* arg = NULL;
+					foreach (arg, n->args) {
+						DefElem* defel = (DefElem*)lfirst(arg);
+						if (strcmp(defel->defname, "language") == 0) {
+							with_language = true;
+							break;
+						}
+					}
+					if (!with_language) {
+						n->args = lappend(n->args, makeDefElem("language", (Node *)makeString("pltsql")));
+					}
 					$$ = (Node *)n;
 				}
 		;
