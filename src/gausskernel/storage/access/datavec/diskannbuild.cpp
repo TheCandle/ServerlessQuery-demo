@@ -163,7 +163,6 @@ static void CreateMetaPage(Relation index, DiskAnnBuildState* buildstate, ForkNu
 {
     Buffer buf;
     Page page;
-    char* pqTable;
     DiskAnnMetaPage metap;
 
     buf = ReadBufferExtended(index, MAIN_FORKNUM, P_NEW, RBM_NORMAL, NULL);

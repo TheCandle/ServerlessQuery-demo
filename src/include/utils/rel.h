@@ -301,7 +301,7 @@ typedef struct RelationData {
     struct LocalRelationEntry *entry;
 
     /* used only for datavec pq */
-    char *pqTable;
+    char *pqTable; /* For diskann pq below, we store the non-transposed pqtable here */
     float *pqDistanceTable; 
     bool rd_optionsValid;
 
