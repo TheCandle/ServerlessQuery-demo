@@ -283,7 +283,7 @@ static BlockNumber InsertVectorIntoPage(Relation index, Vector* vec, double sqrS
         page = DiskAnnInitRegisterPage(index, buf);
     } else {
         state = GenericXLogStart(index);
-        page = GenericXLogRegisterBuffer(state, buf, 0);
+        page = GenericXLogRegisterBuffer(state, buf, GENERIC_XLOG_FULL_IMAGE);
         DiskAnnInitPage(page, BufferGetPageSize(buf));
     }
 
