@@ -3368,3 +3368,835 @@ BEGIN
 END
 $body$
 LANGUAGE plpgsql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_get_lang_metadata_json(IN p_lang_spec_culture TEXT)
+RETURNS JSON
+AS
+$BODY$
+DECLARE
+    v_locale_parts TEXT[] COLLATE "C";
+    v_lang_data_json JSON;
+    v_lang_spec_culture VARCHAR COLLATE "C";
+    v_is_cached BOOLEAN := FALSE;
+BEGIN
+    v_lang_spec_culture := pg_catalog.upper(pg_catalog.btrim(p_lang_spec_culture));
+
+    IF (char_length(v_lang_spec_culture) > 0)
+    THEN
+        BEGIN
+            v_lang_data_json := nullif(current_setting(format('sys.lang_metadata_json.%s',
+                                                               v_lang_spec_culture)), '')::JSON;
+        EXCEPTION
+            WHEN undefined_object THEN
+            v_lang_data_json := NULL;
+        END;
+
+        IF (v_lang_data_json IS NULL)
+        THEN
+            v_lang_spec_culture := pg_catalog.upper(regexp_replace(v_lang_spec_culture, '-\s*', '_', 'gi'));
+            IF (v_lang_spec_culture IN ('AR', 'FI') OR
+                v_lang_spec_culture ~ '_')
+            THEN
+                SELECT lang_data_json
+                  INTO STRICT v_lang_data_json
+                  FROM sys.shark_syslanguages
+                 WHERE spec_culture = v_lang_spec_culture;
+            ELSE
+                SELECT lang_data_json
+                  INTO STRICT v_lang_data_json
+                  FROM sys.shark_syslanguages
+                 WHERE lang_name_mssql = v_lang_spec_culture
+                    OR lang_alias_mssql = v_lang_spec_culture;
+            END IF;
+        ELSE
+            v_is_cached := TRUE;
+        END IF;
+    ELSE
+        v_lang_spec_culture := current_setting('LC_TIME');
+
+        v_lang_spec_culture := CASE
+                                  WHEN (v_lang_spec_culture !~ '\.') THEN v_lang_spec_culture
+                                  ELSE substring(v_lang_spec_culture, '(.*)(?:\.)')
+                               END;
+
+        v_lang_spec_culture := pg_catalog.upper(regexp_replace(v_lang_spec_culture, ',\s*', '_', 'gi'));
+
+        BEGIN
+            v_lang_data_json := nullif(current_setting(format('sys.lang_metadata_json.%s',
+                                                               v_lang_spec_culture)), '')::JSON;
+        EXCEPTION
+            WHEN undefined_object THEN
+            v_lang_data_json := NULL;
+        END;
+
+        IF (v_lang_data_json IS NULL)
+        THEN
+            BEGIN
+                IF (char_length(v_lang_spec_culture) = 5)
+                THEN
+                    SELECT lang_data_json
+                      INTO STRICT v_lang_data_json
+                      FROM sys.shark_syslanguages
+                     WHERE spec_culture = v_lang_spec_culture;
+                ELSE
+                    v_locale_parts := string_to_array(v_lang_spec_culture, '-');
+
+                    SELECT lang_data_json
+                      INTO STRICT v_lang_data_json
+                      FROM sys.shark_syslanguages
+                     WHERE lang_name_pg = v_locale_parts[1]
+                       AND territory = v_locale_parts[2];
+                END IF;
+            EXCEPTION
+                WHEN OTHERS THEN
+                    v_lang_spec_culture := 'EN_US';
+
+                    SELECT lang_data_json
+                      INTO v_lang_data_json
+                      FROM sys.shark_syslanguages
+                     WHERE spec_culture = v_lang_spec_culture;
+            END;
+        ELSE
+            v_is_cached := TRUE;
+        END IF;
+    END IF;
+
+    IF (NOT v_is_cached) THEN
+        BEGIN
+            PERFORM set_config(format('sys.lang_metadata_json.%s',
+                                                v_lang_spec_culture),
+                                        v_lang_data_json::TEXT,
+                                        FALSE);
+        EXCEPTION
+            WHEN invalid_transaction_state THEN
+            -- This exception will only occur when we are trying to set config in parallel mode
+            -- we can ignore this error as we cannot store this config during a parallel operation
+        END;
+    END IF;
+
+    RETURN v_lang_data_json;
+EXCEPTION
+    WHEN invalid_text_representation THEN
+        RAISE USING MESSAGE := pg_catalog.format('The language metadata JSON value extracted from chache is not a valid JSON object.',
+                                      p_lang_spec_culture),
+                    HINT := 'Drop the current session, fix the appropriate record in "sys.shark_syslanguages" table, and try again after reconnection.';
+
+    WHEN OTHERS THEN
+        RAISE USING MESSAGE := pg_catalog.format('"%s" is not a valid special culture or language name parameter.',
+                                      p_lang_spec_culture),
+                    DETAIL := 'Use of incorrect "lang_spec_culture" parameter value during conversion process.',
+                    HINT := 'Change "lang_spec_culture" parameter to the proper value and try again.';
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+-- CAST and related functions.
+-- Duplicate functions with arg TEXT since ANYELEMNT cannot handle type unknown.
+
+CREATE OR REPLACE FUNCTION sys.shark_cast_floor_smallint(IN arg TEXT)
+RETURNS SMALLINT
+AS $BODY$ BEGIN
+    RETURN CAST(arg AS SMALLINT);
+END; $BODY$
+LANGUAGE plpgsql
+STABLE;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_cast_floor_smallint(IN arg ANYELEMENT)
+RETURNS SMALLINT
+AS $BODY$ BEGIN
+    CASE pg_typeof(arg)
+        WHEN 'numeric'::regtype, 'double precision'::regtype, 'real'::regtype THEN
+            RETURN CAST(TRUNC(arg) AS SMALLINT);
+        ELSE
+            RETURN CAST(arg AS SMALLINT);
+    END CASE;
+END; $BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_cast_floor_int(IN arg TEXT)
+RETURNS INT
+AS $BODY$ BEGIN
+    RETURN CAST(arg AS INT);
+END; $BODY$
+LANGUAGE plpgsql
+STABLE;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_cast_floor_int(IN arg ANYELEMENT)
+RETURNS INT
+AS $BODY$ BEGIN
+    CASE pg_typeof(arg)
+        WHEN 'numeric'::regtype, 'double precision'::regtype, 'real'::regtype THEN
+            RETURN CAST(TRUNC(arg) AS INT);
+        ELSE
+            RETURN CAST(arg AS INT);
+    END CASE;
+END; $BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_cast_floor_bigint(IN arg TEXT)
+RETURNS BIGINT
+AS $BODY$ BEGIN
+    RETURN CAST(arg AS BIGINT);
+END; $BODY$
+LANGUAGE plpgsql
+STABLE;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_cast_floor_bigint(IN arg ANYELEMENT)
+RETURNS BIGINT
+AS $BODY$ BEGIN
+    CASE pg_typeof(arg)
+        WHEN 'numeric'::regtype, 'double precision'::regtype, 'real'::regtype THEN
+            RETURN CAST(TRUNC(arg) AS BIGINT);
+        ELSE
+            RETURN CAST(arg AS BIGINT);
+    END CASE;
+END; $BODY$
+LANGUAGE plpgsql
+STABLE;
+
+-- TRY_CAST helper functions
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_floor_smallint(IN arg TEXT) RETURNS SMALLINT
+AS $BODY$ BEGIN
+    RETURN sys.shark_cast_floor_smallint(arg);
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END; $BODY$
+LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_floor_smallint(IN arg ANYELEMENT) RETURNS SMALLINT
+AS $BODY$ BEGIN
+    RETURN sys.shark_cast_floor_smallint(arg);
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END; $BODY$
+LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_floor_int(IN arg TEXT) RETURNS INT
+AS $BODY$ BEGIN
+    RETURN sys.shark_cast_floor_int(arg);
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END; $BODY$
+LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_floor_int(IN arg ANYELEMENT) RETURNS INT
+AS $BODY$ BEGIN
+    RETURN sys.shark_cast_floor_int(arg);
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END; $BODY$
+LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_floor_bigint(IN arg TEXT) RETURNS BIGINT
+AS $BODY$ BEGIN
+    RETURN sys.shark_cast_floor_bigint(arg);
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_floor_bigint(IN arg ANYELEMENT) RETURNS BIGINT
+AS $BODY$ BEGIN
+    RETURN sys.shark_cast_floor_bigint(arg);
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg SMALLINT, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+            -- Do nothing. Output carries NULL.
+END; $BODY$
+LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg TINYINT, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+            -- Do nothing. Output carries NULL.
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg INT, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+            -- Do nothing. Output carries NULL.
+END; $BODY$
+LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg BIGINT, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+            -- Do nothing. Output carries NULL.
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg NUMERIC, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+            -- Do nothing. Output carries NULL.
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg TEXT, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+            -- Do nothing. Output carries NULL.
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg VARCHAR, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg BPCHAR, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg NVARCHAR2, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg CHAR, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg REAL, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg DOUBLE PRECISION, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg BOOL, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg TIME, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg TIMETZ, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg TIMESTAMP, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg TIMESTAMPTZ, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg DATE, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_cast_to_any(IN arg SMALLDATETIME, INOUT output ANYELEMENT, IN typmod INT)
+RETURNS ANYELEMENT
+AS $BODY$ BEGIN
+    EXECUTE pg_catalog.format('SELECT CAST(CAST(%L AS %s) AS %s)', arg, format_type(pg_typeof(arg), NULL), format_type(pg_typeof(output), typmod)) INTO output;
+    EXCEPTION
+        WHEN cannot_coerce THEN
+            RAISE USING MESSAGE := pg_catalog.format('cannot cast type %s to %s.', pg_typeof(arg),
+                                      pg_typeof(output));
+        WHEN OTHERS THEN
+END; $BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_date_to_string(IN p_datatype TEXT,
+                                                                 IN p_dateval DATE,
+                                                                 IN p_style NUMERIC DEFAULT 20)
+RETURNS TEXT
+AS
+$BODY$
+DECLARE
+    v_day VARCHAR COLLATE "C";
+    v_dateval DATE;
+    v_style SMALLINT;
+    v_month SMALLINT;
+    v_resmask VARCHAR COLLATE "C";
+    v_datatype VARCHAR COLLATE "C";
+    v_language VARCHAR COLLATE "C";
+    v_monthname VARCHAR COLLATE "C";
+    v_resstring VARCHAR COLLATE "C";
+    v_lengthexpr VARCHAR COLLATE "C";
+    v_maxlength SMALLINT;
+    v_res_length SMALLINT;
+    v_err_message VARCHAR COLLATE "C";
+    v_res_datatype VARCHAR COLLATE "C";
+    v_lang_metadata_json JSON;
+    VARCHAR_MAX CONSTANT SMALLINT := 8000;
+    NVARCHAR_MAX CONSTANT SMALLINT := 4000;
+    CONVERSION_LANG CONSTANT VARCHAR COLLATE "C" := '';
+    DATATYPE_REGEXP CONSTANT VARCHAR COLLATE "C" := '^\s*(CHAR|BPCHAR|NCHAR|CHARACTER|NVARCHAR|NVARCHAR2|VARCHAR|CHARACTER VARYING)\s*$';
+    DATATYPE_MASK_REGEXP CONSTANT VARCHAR COLLATE "C" := '^\s*(?:CHAR|BPCHAR|NCHAR|CHARACTER|NVARCHAR|NVARCHAR2|VARCHAR|CHARACTER VARYING)\s*\(\s*(\d+|MAX)\s*\)\s*$';
+BEGIN
+    v_datatype := pg_catalog.upper(pg_catalog.btrim(p_datatype));
+    v_style := floor(p_style)::SMALLINT;
+
+    IF (scale(p_style) > 0) THEN
+        RAISE most_specific_type_mismatch;
+    ELSIF (NOT ((v_style BETWEEN 0 AND 13) OR
+                (v_style BETWEEN 20 AND 25) OR
+                (v_style BETWEEN 100 AND 113) OR
+                v_style IN (120, 121, 126, 127, 130, 131)))
+    THEN
+        RAISE invalid_parameter_value;
+    ELSIF (v_style IN (8, 24, 108)) THEN
+        RAISE invalid_datetime_format;
+    END IF;
+
+    IF (v_datatype ~* DATATYPE_MASK_REGEXP) THEN
+        v_res_datatype := PG_CATALOG.rtrim(split_part(v_datatype, '(', 1));
+        v_maxlength := CASE
+                          WHEN (v_res_datatype IN ('CHAR', 'VARCHAR')) THEN VARCHAR_MAX
+                          ELSE NVARCHAR_MAX
+                       END;
+
+        v_lengthexpr := substring(v_datatype, DATATYPE_MASK_REGEXP);
+
+        IF (v_lengthexpr <> 'MAX' AND char_length(v_lengthexpr) > 4) THEN
+            RAISE interval_field_overflow;
+        END IF;
+
+        v_res_length := CASE v_lengthexpr
+                           WHEN 'MAX' THEN v_maxlength
+                           ELSE v_lengthexpr::SMALLINT
+                        END;
+    ELSIF (v_datatype ~* DATATYPE_REGEXP) THEN
+        v_res_datatype := v_datatype;
+    ELSE
+        RAISE datatype_mismatch;
+    END IF;
+
+    v_dateval := CASE
+                    WHEN (v_style NOT IN (130, 131)) THEN p_dateval
+                    ELSE sys.shark_conv_greg_to_hijri(p_dateval) + 1
+                 END;
+
+    v_day := PG_CATALOG.ltrim(to_char(v_dateval, 'DD'), '0');
+    v_month := to_char(v_dateval, 'MM')::SMALLINT;
+
+    v_language := CASE
+                     WHEN (v_style IN (130, 131)) THEN 'HIJRI'
+                     ELSE CONVERSION_LANG
+                  END;
+    BEGIN
+        v_lang_metadata_json := sys.shark_get_lang_metadata_json(v_language);
+    EXCEPTION
+        WHEN OTHERS THEN
+        RAISE invalid_character_value_for_cast;
+    END;
+
+    v_monthname := (v_lang_metadata_json -> 'months_shortnames') ->> v_month - 1;
+
+    v_resmask := CASE
+                    WHEN (v_style IN (1, 22)) THEN 'MM/DD/YY'
+                    WHEN (v_style = 101) THEN 'MM/DD/YYYY'
+                    WHEN (v_style = 2) THEN 'YY.MM.DD'
+                    WHEN (v_style = 102) THEN 'YYYY.MM.DD'
+                    WHEN (v_style = 3) THEN 'DD/MM/YY'
+                    WHEN (v_style = 103) THEN 'DD/MM/YYYY'
+                    WHEN (v_style = 4) THEN 'DD.MM.YY'
+                    WHEN (v_style = 104) THEN 'DD.MM.YYYY'
+                    WHEN (v_style = 5) THEN 'DD-MM-YY'
+                    WHEN (v_style = 105) THEN 'DD-MM-YYYY'
+                    WHEN (v_style = 6) THEN 'DD $mnme$ YY'
+                    WHEN (v_style IN (13, 106, 113)) THEN 'DD $mnme$ YYYY'
+                    WHEN (v_style = 7) THEN '$mnme$ DD, YY'
+                    WHEN (v_style = 107) THEN '$mnme$ DD, YYYY'
+                    WHEN (v_style = 10) THEN 'MM-DD-YY'
+                    WHEN (v_style = 110) THEN 'MM-DD-YYYY'
+                    WHEN (v_style = 11) THEN 'YY/MM/DD'
+                    WHEN (v_style = 111) THEN 'YYYY/MM/DD'
+                    WHEN (v_style = 12) THEN 'YYMMDD'
+                    WHEN (v_style = 112) THEN 'YYYYMMDD'
+                    WHEN (v_style IN (20, 21, 23, 25, 120, 121, 126, 127)) THEN 'YYYY-MM-DD'
+                    WHEN (v_style = 130) THEN 'DD $mnme$ YYYY'
+                    WHEN (v_style = 131) THEN pg_catalog.format('%s/MM/YYYY', lpad(v_day, 2, ' '))
+                    WHEN (v_style IN (0, 9, 100, 109)) THEN pg_catalog.format('$mnme$ %s YYYY', lpad(v_day, 2, ' '))
+                 END;
+
+    v_resstring := to_char(v_dateval, v_resmask);
+    v_resstring := pg_catalog.replace(v_resstring, '$mnme$', v_monthname);
+    v_resstring := substring(v_resstring, 1, coalesce(v_res_length, char_length(v_resstring)));
+    v_res_length := coalesce(v_res_length,
+                             CASE v_res_datatype
+                                WHEN 'CHAR' THEN 30
+                                ELSE 60
+                             END);
+    RETURN CASE
+              WHEN (v_res_datatype NOT IN ('CHAR', 'NCHAR')) THEN v_resstring
+              ELSE rpad(v_resstring, v_res_length, ' ')
+           END;
+EXCEPTION
+    WHEN most_specific_type_mismatch THEN
+        RAISE USING MESSAGE := 'Argument data type NUMERIC is invalid for argument 3 of convert function.',
+                    DETAIL := 'Use of incorrect "style" parameter value during conversion process.',
+                    HINT := 'Change "style" parameter to the proper value and try again.';
+
+    WHEN invalid_parameter_value THEN
+        RAISE USING MESSAGE := pg_catalog.format('%s is not a valid style number when converting from DATE to a character string.', v_style),
+                    DETAIL := 'Use of incorrect "style" parameter value during conversion process.',
+                    HINT := 'Change "style" parameter to the proper value and try again.';
+
+    WHEN invalid_datetime_format THEN
+        RAISE USING MESSAGE := pg_catalog.format('Error converting data type DATE to %s.', pg_catalog.btrim(p_datatype)),
+                    DETAIL := 'Incorrect using of pair of input parameters values during conversion process.',
+                    HINT := 'Check the input parameters values, correct them if needed, and try again.';
+
+   WHEN interval_field_overflow THEN
+       RAISE USING MESSAGE := pg_catalog.format('The size (%s) given to the convert specification ''%s'' exceeds the maximum allowed for any data type (%s).',
+                                     v_lengthexpr,
+                                     pg_catalog.lower(v_res_datatype),
+                                     v_maxlength),
+                   DETAIL := 'Use of incorrect size value of data type parameter during conversion process.',
+                   HINT := 'Change size component of data type parameter to the allowable value and try again.';
+
+    WHEN datatype_mismatch THEN
+        RAISE USING MESSAGE := 'Data type should be one of these values: ''CHAR(n|MAX)'', ''NCHAR(n|MAX)'', ''VARCHAR(n|MAX)'', ''NVARCHAR(n|MAX)''.',
+                    DETAIL := 'Use of incorrect "datatype" parameter value during conversion process.',
+                    HINT := 'Change "datatype" parameter to the proper value and try again.';
+
+    WHEN invalid_character_value_for_cast THEN
+        RAISE USING MESSAGE := pg_catalog.format('Invalid CONVERSION_LANG constant value - ''%s''. Allowed values are: ''English'', ''Deutsch'', etc.',
+                                      CONVERSION_LANG),
+                    DETAIL := 'Compiled incorrect CONVERSION_LANG constant value in function''s body.',
+                    HINT := 'Correct CONVERSION_LANG constant value in function''s body, recompile it and try again.';
+
+    WHEN invalid_text_representation THEN
+        GET STACKED DIAGNOSTICS v_err_message = MESSAGE_TEXT;
+        v_err_message := substring(pg_catalog.lower(v_err_message), 'integer\:\s\"(.*)\"');
+
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to convert "%s" value to SMALLINT (or INTEGER) data type.',
+                                      v_err_message),
+                    DETAIL := 'Supplied value contains illegal characters.',
+                    HINT := 'Correct supplied value, remove all illegal characters.';
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_time_to_string(IN p_datatype TEXT,
+                                                                 IN p_src_datatype TEXT,
+                                                                 IN p_timeval TIME(6) WITHOUT TIME ZONE,
+                                                                 IN p_style NUMERIC DEFAULT 25)
+RETURNS TEXT
+AS
+$BODY$
+DECLARE
+    v_hours VARCHAR COLLATE "C";
+    v_style SMALLINT;
+    v_scale SMALLINT;
+    v_resmask VARCHAR COLLATE "C";
+    v_fseconds VARCHAR COLLATE "C";
+    v_datatype VARCHAR COLLATE "C";
+    v_resstring VARCHAR COLLATE "C";
+    v_lengthexpr VARCHAR COLLATE "C";
+    v_res_length SMALLINT;
+    v_res_datatype VARCHAR COLLATE "C";
+    v_src_datatype VARCHAR COLLATE "C";
+    v_res_maxlength SMALLINT;
+    VARCHAR_MAX CONSTANT SMALLINT := 8000;
+    NVARCHAR_MAX CONSTANT SMALLINT := 4000;
+    -- We use the regex below to make sure input p_datatype is one of them
+    DATATYPE_REGEXP CONSTANT VARCHAR COLLATE "C" := '^\s*(CHAR|BPCHAR|NCHAR|CHARACTER|NVARCHAR|NVARCHAR2|VARCHAR|CHARACTER VARYING)\s*$';
+    -- We use the regex below to get the length of the datatype, if specified
+    -- For example, to get the '10' out of 'varchar(10)'
+    DATATYPE_MASK_REGEXP CONSTANT VARCHAR COLLATE "C" := '^\s*(?:CHAR|BPCHAR|NCHAR|CHARACTER|NVARCHAR|NVARCHAR2|VARCHAR|CHARACTER VARYING)\s*\(\s*(\d+|MAX)\s*\)\s*$';
+    SRCDATATYPE_MASK_REGEXP VARCHAR COLLATE "C" := '^\s*(?:TIME)\s*(?:\s*\(\s*(\d+)\s*\)\s*)?\s*$';
+BEGIN
+    v_datatype := pg_catalog.upper(pg_catalog.btrim(p_datatype));
+    v_src_datatype := pg_catalog.upper(pg_catalog.btrim(p_src_datatype));
+    v_style := floor(p_style)::SMALLINT;
+
+    IF (v_src_datatype ~* SRCDATATYPE_MASK_REGEXP)
+    THEN
+        v_scale := coalesce(substring(v_src_datatype, SRCDATATYPE_MASK_REGEXP)::SMALLINT, 7);
+        IF (v_scale NOT BETWEEN 0 AND 7) THEN
+            RAISE invalid_regular_expression;
+        END IF;
+    ELSE
+        RAISE most_specific_type_mismatch;
+    END IF;
+
+    IF (v_datatype ~* DATATYPE_MASK_REGEXP)
+    THEN
+        v_res_datatype := PG_CATALOG.rtrim(split_part(v_datatype, '(', 1));
+
+        v_res_maxlength := CASE
+                              WHEN (v_res_datatype IN ('CHAR', 'VARCHAR')) THEN VARCHAR_MAX
+                              ELSE NVARCHAR_MAX
+                           END;
+
+        v_lengthexpr := substring(v_datatype, DATATYPE_MASK_REGEXP);
+
+        IF (v_lengthexpr <> 'MAX' AND char_length(v_lengthexpr) > 4) THEN
+            RAISE interval_field_overflow;
+        END IF;
+
+        v_res_length := CASE v_lengthexpr
+                           WHEN 'MAX' THEN v_res_maxlength
+                           ELSE v_lengthexpr::SMALLINT
+                        END;
+    ELSIF (v_datatype ~* DATATYPE_REGEXP) THEN
+        v_res_datatype := v_datatype;
+    ELSE
+        RAISE datatype_mismatch;
+    END IF;
+
+    IF (scale(p_style) > 0) THEN
+        RAISE escape_character_conflict;
+    ELSIF (NOT ((v_style BETWEEN 0 AND 14) OR
+                (v_style BETWEEN 20 AND 25) OR
+                (v_style BETWEEN 100 AND 114) OR
+                v_style IN (120, 121, 126, 127, 130, 131)))
+    THEN
+        RAISE invalid_parameter_value;
+    ELSIF ((v_style BETWEEN 1 AND 7) OR
+           (v_style BETWEEN 10 AND 12) OR
+           (v_style BETWEEN 101 AND 107) OR
+           (v_style BETWEEN 110 AND 112) OR
+           v_style = 23)
+    THEN
+        RAISE invalid_datetime_format;
+    END IF;
+
+    v_hours := PG_CATALOG.ltrim(to_char(p_timeval, 'HH12'), '0');
+    v_fseconds := sys.shark_get_microsecs_from_fractsecs_v2(to_char(p_timeval, 'US'), v_scale);
+
+    -- Following condition will handle overflow of fractsecs
+    IF (v_fseconds::INTEGER < 0) THEN
+        v_fseconds := PG_CATALOG.repeat('0', LEAST(v_scale, 6));
+        p_timeval := p_timeval + INTERVAL '1 second';
+    END IF;
+
+    IF (v_scale = 7) THEN
+        v_fseconds := pg_catalog.concat(v_fseconds, '0');
+    END IF;
+
+    IF (v_style IN (0, 100))
+    THEN
+        v_resmask := pg_catalog.concat(v_hours, ':MIAM');
+    ELSIF (v_style IN (8, 20, 24, 108, 120))
+    THEN
+        v_resmask := 'HH24:MI:SS';
+    ELSIF (v_style IN (9, 109))
+    THEN
+        v_resmask := CASE
+                        WHEN (char_length(v_fseconds) = 0) THEN pg_catalog.concat(v_hours, ':MI:SSAM')
+                        ELSE pg_catalog.format('%s:MI:SS.%sAM', v_hours, v_fseconds)
+                     END;
+    ELSIF (v_style IN (13, 14, 21, 25, 113, 114, 121, 126, 127))
+    THEN
+        v_resmask := CASE
+                        WHEN (char_length(v_fseconds) = 0) THEN 'HH24:MI:SS'
+                        ELSE pg_catalog.concat('HH24:MI:SS.', v_fseconds)
+                     END;
+    ELSIF (v_style = 22)
+    THEN
+        v_resmask := pg_catalog.format('%s:MI:SS AM', lpad(v_hours, 2, ' '));
+    ELSIF (v_style IN (130, 131))
+    THEN
+        v_resmask := CASE
+                        WHEN (char_length(v_fseconds) = 0) THEN pg_catalog.concat(lpad(v_hours, 2, ' '), ':MI:SSAM')
+                        ELSE pg_catalog.format('%s:MI:SS.%sAM', lpad(v_hours, 2, ' '), v_fseconds)
+                     END;
+    END IF;
+
+    v_resstring := to_char(p_timeval, v_resmask);
+
+    v_resstring := substring(v_resstring, 1, coalesce(v_res_length, char_length(v_resstring)));
+    v_res_length := coalesce(v_res_length,
+                             CASE v_res_datatype
+                                WHEN 'CHAR' THEN 30
+                                ELSE 60
+                             END);
+    RETURN CASE
+              WHEN (v_res_datatype NOT IN ('CHAR', 'NCHAR')) THEN v_resstring
+              ELSE rpad(v_resstring, v_res_length, ' ')
+           END;
+EXCEPTION
+    WHEN most_specific_type_mismatch THEN
+        RAISE USING MESSAGE := 'Source data type should be ''TIME'' or ''TIME(n)''.',
+                    DETAIL := 'Use of incorrect "src_datatype" parameter value during conversion process.',
+                    HINT := 'Change "src_datatype" parameter to the proper value and try again.';
+
+   WHEN invalid_regular_expression THEN
+       RAISE USING MESSAGE := pg_catalog.format('The source data type scale (%s) given to the convert specification exceeds the maximum allowable value (7).',
+                                     v_scale),
+                   DETAIL := 'Use of incorrect scale value of source data type parameter during conversion process.',
+                   HINT := 'Change scale component of source data type parameter to the allowable value and try again.';
+
+   WHEN interval_field_overflow THEN
+       RAISE USING MESSAGE := pg_catalog.format('The size (%s) given to the convert specification ''%s'' exceeds the maximum allowed for any data type (%s).',
+                                     v_lengthexpr, pg_catalog.lower(v_res_datatype), v_res_maxlength),
+                   DETAIL := 'Use of incorrect size value of target data type parameter during conversion process.',
+                   HINT := 'Change size component of data type parameter to the allowable value and try again.';
+
+    WHEN escape_character_conflict THEN
+        RAISE USING MESSAGE := 'Argument data type NUMERIC is invalid for argument 4 of convert function.',
+                    DETAIL := 'Use of incorrect "style" parameter value during conversion process.',
+                    HINT := 'Change "style" parameter to the proper value and try again.';
+
+    WHEN invalid_parameter_value THEN
+        RAISE USING MESSAGE := pg_catalog.format('%s is not a valid style number when converting from TIME to a character string.', v_style),
+                    DETAIL := 'Use of incorrect "style" parameter value during conversion process.',
+                    HINT := 'Change "style" parameter to the proper value and try again.';
+
+    WHEN datatype_mismatch THEN
+        RAISE USING MESSAGE := 'Data type should be one of these values: ''CHAR(n|MAX)'', ''NCHAR(n|MAX)'', ''VARCHAR(n|MAX)'', ''NVARCHAR(n|MAX)''.',
+                    DETAIL := 'Use of incorrect "datatype" parameter value during conversion process.',
+                    HINT := 'Change "datatype" parameter to the proper value and try again.';
+
+    WHEN invalid_datetime_format THEN
+        RAISE USING MESSAGE := pg_catalog.format('Error converting data type TIME to %s.',
+                                      PG_CATALOG.rtrim(split_part(pg_catalog.btrim(p_datatype), '(', 1))),
+                    DETAIL := 'Incorrect using of pair of input parameters values during conversion process.',
+                    HINT := 'Check the input parameters values, correct them if needed, and try again.';
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
