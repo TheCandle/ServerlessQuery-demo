@@ -1275,7 +1275,7 @@ void ExecOpenUnusedIndices(ResultRelInfo* resultRelInfo, bool speculative)
  *		resultRelInfo->ri_RelationDesc.
  * ----------------------------------------------------------------
  */
-void ExecOpenIndices(ResultRelInfo* resultRelInfo, bool speculative)
+void ExecOpenIndices(ResultRelInfo* resultRelInfo, bool speculative, bool checkDisableIndex)
 {
     Relation resultRelation = resultRelInfo->ri_RelationDesc;
     List* indexoidlist = NIL;
@@ -1327,6 +1327,14 @@ void ExecOpenIndices(ResultRelInfo* resultRelInfo, bool speculative)
         IndexInfo* ii = NULL;
 
         indexDesc = index_open(indexOid, RowExclusiveLock);
+
+        /* don't support IUD if there is an diable index */
+        if (checkDisableIndex && indexOid >= FirstNormalObjectId &&
+            !GetIndexEnableStateByTuple(indexDesc->rd_indextuple)) {
+            ereport(ERROR, (errcode(ERRCODE_OPERATOR_INTERVENTION),
+                errmsg("The relation(%s) has no permit to write because it has index(%s) in disable state",
+                RelationGetRelationName(resultRelation), RelationGetRelationName(indexDesc))));
+        }
 
         // ignore INSERT/UPDATE/DELETE on unusable index
         if (!IndexIsUsable(indexDesc->rd_index)) {

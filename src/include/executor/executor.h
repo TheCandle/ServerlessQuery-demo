@@ -660,7 +660,7 @@ extern Partition ExecOpenScanParitition(
 
 extern void ExecOpenUnusedIndices(ResultRelInfo* resultRelInfo, bool speculative);
 extern void ExecCloseUnsedIndices(ResultRelInfo* resultRelInfo);
-extern void ExecOpenIndices(ResultRelInfo* resultRelInfo, bool speculative);
+extern void ExecOpenIndices(ResultRelInfo* resultRelInfo, bool speculative, bool checkDisableIndex = true);
 extern void ExecCloseIndices(ResultRelInfo* resultRelInfo);
 extern List* ExecInsertIndexTuples(
     TupleTableSlot* slot, ItemPointer tupleid, EState* estate, Relation targetPartRel,

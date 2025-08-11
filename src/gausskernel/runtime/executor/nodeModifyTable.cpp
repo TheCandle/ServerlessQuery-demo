@@ -2266,9 +2266,10 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
 lreplace:
 
         /* acquire Form_pg_attrdef ad_on_update */
-        if (result_relation_desc->rd_att->constr && result_relation_desc->rd_att->constr->has_on_update) {
-            bool update_fix_result =  ExecComputeStoredUpdateExpr(result_rel_info, estate, slot, tuple, CMD_UPDATE, tupleid, oldPartitionOid, bucketid);
-            if (!update_fix_result) {
+        if (ExecHasDefaultUpdateExpr(result_relation_desc->rd_att)) {
+            bool updateFixResult =  ExecComputeStoredUpdateExpr(result_rel_info, estate, slot,
+                tuple, CMD_UPDATE, tupleid, oldPartitionOid, bucketid);
+            if (!updateFixResult) {
                 tuple = slot->tts_tuple;
                 /* The partition key might have been updated by on update rule. */
                 cross_partition = true;
@@ -4139,11 +4140,14 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
         /*
          * If there are indices on the result relation, open them and save
          * descriptors in the result relation info, so that we can add new
-         * index entries for the tuples we add/update.	We need not do this
-         * for a DELETE, however, since deletion doesn't affect indexes. Also,
+         * index entries for the tuples we add/update.	Also,
          * inside an EvalPlanQual operation, the indexes might be open
          * already, since we share the resultrel state with the original
          * query.
+         *
+         * We actually need not do this for a DELETE, since deletion doesn't affect indexes,
+         * but we need to check whether there is an diable index on this relation, so we still
+         * do this.
          */
         for (int ri = 0; ri < resultRelationNum; ri++) {
             if (result_rel_info->ri_RelationDesc->rd_rel->relhasindex &&
@@ -4152,10 +4156,10 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
                 if (result_rel_info->ri_FdwRoutine == NULL || result_rel_info->ri_FdwRoutine->GetFdwType == NULL ||
                     result_rel_info->ri_FdwRoutine->GetFdwType() != MOT_ORC) {
 #endif
-                    if (RelationIsUstoreFormat(result_rel_info->ri_RelationDesc) || operation != CMD_DELETE) {
-                        ExecOpenIndices(result_rel_info, (node->upsertAction != UPSERT_NONE || node->isReplace ||
-                                        (estate->es_plannedstmt && estate->es_plannedstmt->hasIgnore)));
-                    }
+                    /* don't need to check disable index if it's an explain command */
+                    ExecOpenIndices(result_rel_info, (node->upsertAction != UPSERT_NONE || node->isReplace ||
+                                    (estate->es_plannedstmt && estate->es_plannedstmt->hasIgnore)),
+                                    !(eflags & EXEC_FLAG_EXPLAIN_ONLY));
 #ifdef ENABLE_MOT
                 }
 #endif
