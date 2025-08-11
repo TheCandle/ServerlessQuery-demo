@@ -244,3 +244,18 @@ drop function if exists sys.shark_try_cast_to_any(IN arg DATE, INOUT output ANYE
 drop function if exists sys.shark_try_cast_to_any(IN arg SMALLDATETIME, INOUT output ANYELEMENT, IN typmod INT);
 drop function if exists sys.shark_conv_date_to_string(IN p_datatype TEXT, IN p_dateval DATE, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_time_to_string(IN p_datatype TEXT, IN p_src_datatype TEXT, IN p_timeval TIME(6) WITHOUT TIME ZONE, IN p_style NUMERIC);
+
+drop function if exists sys.shark_conv_string_to_datetime_v2(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_string_to_datetime_v2(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_string_to_datetimeoffset(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_string_to_datetimeoffset(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
+
+drop function if exists sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER, IN arg TEXT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER, IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER, IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER, IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
+
+drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg TEXT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
