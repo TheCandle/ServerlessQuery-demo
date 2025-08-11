@@ -6056,3 +6056,553 @@ $BODY$
 LANGUAGE plpgsql
 IMMUTABLE
 RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varchar(IN typename TEXT,
+                                                        IN arg ANYELEMENT,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT -1)
+RETURNS VARCHAR
+AS
+$BODY$
+BEGIN
+	IF try THEN
+	    RETURN sys.shark_try_conv_to_varchar(typename, arg, p_style);
+    ELSE
+	    RETURN sys.shark_conv_to_varchar(typename, arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_to_varchar(IN typename TEXT,
+														IN arg anyelement,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS VARCHAR
+AS
+$BODY$
+DECLARE
+	v_style SMALLINT;
+BEGIN
+	v_style := floor(p_style)::SMALLINT;
+    CASE pg_typeof(arg)
+	WHEN 'date'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.shark_try_conv_date_to_string(typename, arg);
+		ELSE
+			RETURN sys.shark_try_conv_date_to_string(typename, arg, p_style);
+		END IF;
+	WHEN 'time'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.shark_try_conv_time_to_string(typename, 'TIME', arg);
+		ELSE
+			RETURN sys.shark_try_conv_time_to_string(typename, 'TIME', arg, p_style);
+		END IF;
+	WHEN 'timestamp'::regtype THEN
+        IF v_style = -1 THEN
+			RETURN sys.shark_try_conv_datetime_to_string(typename, 'TIMESTAMP WITHOUT TIME ZONE', arg::timestamp);
+		ELSE
+			RETURN sys.shark_try_conv_datetime_to_string(typename, 'TIMESTAMP WITHOUT TIME ZONE', arg::timestamp, p_style);
+		END IF;
+	WHEN 'float'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.shark_try_conv_float_to_string(typename, arg);
+		ELSE
+			RETURN sys.shark_try_conv_float_to_string(typename, arg, p_style);
+		END IF;
+	WHEN 'money'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.shark_try_conv_money_to_string(typename, arg::numeric(19,4));
+		ELSE
+			RETURN sys.shark_try_conv_money_to_string(typename, arg::numeric(19,4), p_style);
+		END IF;
+	ELSE
+		RETURN CAST(arg AS VARCHAR);
+	END CASE;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_money_to_string(IN p_datatype TEXT,
+														IN p_moneyval NUMERIC,
+														IN p_style NUMERIC DEFAULT 0)
+RETURNS TEXT
+AS
+$BODY$
+DECLARE
+	v_style SMALLINT;
+	v_format VARCHAR COLLATE "C";
+	v_moneyval NUMERIC(19,4) := p_moneyval::NUMERIC(19,4);
+	v_moneysign NUMERIC(19,4) := sign(v_moneyval);
+	v_moneyabs NUMERIC(19,4) := abs(v_moneyval);
+	v_digits SMALLINT;
+	v_integral_digits SMALLINT;
+	v_decimal_digits SMALLINT;
+	v_result TEXT;
+BEGIN
+	v_style := floor(p_style)::SMALLINT;
+	v_digits := length(v_moneyabs::TEXT);
+	v_decimal_digits := scale(v_moneyabs);
+	IF (v_decimal_digits > 0) THEN
+		v_integral_digits := v_digits - v_decimal_digits - 1;
+	ELSE
+		v_integral_digits := v_digits;
+	END IF;
+	IF (v_style = 0) THEN
+		v_format := (pow(10, v_integral_digits)-10)::TEXT || 'D99';
+		v_result := pg_catalog.btrim(to_char(v_moneyval, v_format));
+	ELSIF (v_style = 1) THEN
+		IF (v_moneysign::SMALLINT = -1) THEN
+			v_result := substring(p_moneyval::PG_CATALOG.MONEY::TEXT, 1, 1) || substring(p_moneyval::PG_CATALOG.MONEY::TEXT, 3);
+		ELSE
+			v_result := substring(p_moneyval::PG_CATALOG.MONEY::TEXT, 2);
+		END IF;
+	ELSIF (v_style = 2 OR v_style = 126) THEN
+		v_format := (pow(10, v_integral_digits)-10)::TEXT || 'D9999';
+		v_result := pg_catalog.btrim(to_char(v_moneyval, v_format));
+	ELSE
+		RAISE invalid_parameter_value;
+	END IF;
+
+	RETURN v_result;
+EXCEPTION
+	WHEN invalid_parameter_value THEN
+		RAISE USING MESSAGE := pg_catalog.format('%s is not a valid style number when converting from MONEY to a character string.', v_style),
+					DETAIL := 'Use of incorrect "style" parameter value during conversion process.',
+					HINT := 'Change "style" parameter to the proper value and try again.';
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_float_to_string(IN p_datatype TEXT,
+														  IN p_floatval FLOAT,
+														  IN p_style NUMERIC DEFAULT 0)
+RETURNS TEXT
+AS
+$BODY$
+DECLARE
+	v_style SMALLINT;
+	v_format VARCHAR COLLATE "C";
+	v_floatval NUMERIC := abs(p_floatval);
+	v_digits SMALLINT;
+	v_integral_digits SMALLINT;
+	v_decimal_digits SMALLINT;
+	v_sign SMALLINT := sign(p_floatval);
+	v_result TEXT;
+	v_res_length SMALLINT;
+	MASK_REGEXP CONSTANT VARCHAR COLLATE "C" := '^\s*(?:character varying)\s*\(\s*(\d+|MAX)\s*\)\s*$';
+BEGIN
+	v_style := floor(p_style)::SMALLINT;
+	IF (v_style = 0) THEN
+		v_digits := length(v_floatval::NUMERIC::TEXT);
+		v_decimal_digits := scale(v_floatval);
+		IF (v_decimal_digits > 0) THEN
+			v_integral_digits := v_digits - v_decimal_digits - 1;
+		ELSE
+			v_integral_digits := v_digits;
+		END IF;
+		IF (v_floatval >= 999999.5) THEN
+			v_format := '9D99999EEEE';
+			v_result := to_char(v_sign::NUMERIC * ceiling(v_floatval), v_format);
+			v_result := to_char(substring(v_result, 1, 8)::NUMERIC, 'FM9D99999')::NUMERIC::TEXT || substring(v_result, 9);
+		ELSIF (v_floatval < 0.0001 AND v_floatval != 0) THEN
+			v_format := '9D99999EEEE';
+			v_result := to_char(v_sign::NUMERIC * v_floatval, v_format);
+			v_result := to_char(substring(v_result, 1, 8)::NUMERIC, 'FM9D99999')::NUMERIC::TEXT || substring(v_result, 9);
+		ELSE
+			IF (6 - v_integral_digits < v_decimal_digits) AND (trunc(abs(v_floatval)) != 0) THEN
+				v_decimal_digits := 6 - v_integral_digits;
+			ELSIF (6 - v_integral_digits < v_decimal_digits) THEN
+				v_decimal_digits := 6;
+			END IF;
+			v_format := (pow(10, v_integral_digits)-10)::TEXT || 'D';
+			IF (v_decimal_digits > 0) THEN
+				v_format := v_format || (pow(10, v_decimal_digits)-1)::TEXT;
+			END IF;
+			v_result := to_char(p_floatval, v_format);
+		END IF;
+	ELSIF (v_style = 1) THEN
+		v_format := '9D9999999EEEE';
+		v_result := to_char(p_floatval, v_format);
+	ELSIF (v_style = 2) THEN
+		v_format := '9D999999999999999EEEE';
+		v_result := to_char(p_floatval, v_format);
+	ELSIF (v_style = 3) THEN
+		v_format := '9D9999999999999999EEEE';
+		v_result := to_char(p_floatval, v_format);
+	ELSE
+		RAISE invalid_parameter_value;
+	END IF;
+
+	v_res_length := substring(p_datatype COLLATE "C", MASK_REGEXP)::SMALLINT;
+	IF v_res_length IS NULL THEN
+		RETURN ltrim(v_result);
+	ELSE
+		RETURN rpad(ltrim(v_result),  v_res_length, ' ');
+	END IF;
+EXCEPTION
+	WHEN invalid_parameter_value THEN
+		RAISE USING MESSAGE := pg_catalog.format('%s is not a valid style number when converting from FLOAT to a character string.', v_style),
+					DETAIL := 'Use of incorrect "style" parameter value during conversion process.',
+					HINT := 'Change "style" parameter to the proper value and try again.';
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_datetime_to_string(IN p_datatype TEXT,
+                                                                         IN p_src_datatype TEXT,
+                                                                         IN p_datetimeval TIMESTAMP WITHOUT TIME ZONE,
+                                                                         IN p_style NUMERIC DEFAULT -1)
+RETURNS TEXT
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_datetime_to_string(p_datatype,
+                                                     p_src_datatype,
+                                                     p_datetimeval,
+                                                     p_style);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_to_varchar(IN typename TEXT,
+														IN arg TEXT,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS VARCHAR
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_to_varchar(typename, arg, p_style);
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_to_varchar(IN typename TEXT,
+														IN arg anyelement,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS VARCHAR
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_to_varchar(typename, arg, p_style);
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_date_to_string(IN p_datatype TEXT,
+                                                                     IN p_dateval DATE,
+                                                                     IN p_style NUMERIC DEFAULT 20)
+RETURNS TEXT
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_date_to_string(p_datatype,
+                                                 p_dateval,
+                                                 p_style);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_time_to_string(IN p_datatype TEXT,
+                                                                     IN p_src_datatype TEXT,
+                                                                     IN p_timeval TIME WITHOUT TIME ZONE,
+                                                                     IN p_style NUMERIC DEFAULT 25)
+RETURNS TEXT
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_time_to_string(p_datatype,
+                                                 p_src_datatype,
+                                                 p_timeval,
+                                                 p_style);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_string_to_datetime2(IN p_datatype TEXT,
+                                                                    IN p_datetimestring TEXT,
+                                                                    IN p_style NUMERIC DEFAULT 0)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_string_to_datetime2(p_datatype,
+                                                    p_datetimestring,
+                                                    p_style);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+-- conversion to date
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg TEXT,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS DATE
+AS
+$BODY$
+BEGIN
+    IF try THEN
+        RETURN sys.shark_try_conv_string_to_datetime2('DATE', arg, p_style);
+    ELSE
+	    RETURN sys.shark_conv_string_to_datetime2('DATE', arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg VARCHAR,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS DATE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_date(arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg NVARCHAR2,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS DATE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_date(arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg BPCHAR,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS DATE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_date(arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg anyelement,
+                                                        IN try BOOL,
+												        IN p_style NUMERIC DEFAULT 0)
+RETURNS DATE
+AS
+$BODY$
+DECLARE
+    resdate DATE;
+BEGIN
+    IF try THEN
+        resdate := sys.shark_try_conv_to_date(arg);
+    ELSE
+        BEGIN
+            resdate := CAST(arg AS DATE);
+        EXCEPTION
+            WHEN cannot_coerce THEN
+                RAISE USING MESSAGE := pg_catalog.format('Explicit conversion from data type %s to date is not allowed.', format_type(pg_typeof(arg)::oid, NULL));
+            WHEN datetime_field_overflow THEN
+                RAISE USING MESSAGE := 'Arithmetic overflow error converting expression to data type date.';
+        END;
+    END IF;
+
+    RETURN resdate;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
+                                                        IN arg TEXT,
+                                                        IN try BOOL,
+												        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIME
+AS
+$BODY$
+DECLARE
+    v_res_datatype TEXT COLLATE "C";
+BEGIN
+    IF (typmod = -1) THEN
+        v_res_datatype := 'TIME';
+    ELSE
+        v_res_datatype := PG_CATALOG.format('TIME(%s)', typmod);
+    END IF;
+
+    IF try THEN
+	    RETURN sys.shark_try_conv_string_to_datetime2(v_res_datatype, arg, p_style);
+    ELSE
+	    RETURN sys.shark_conv_string_to_datetime2(v_res_datatype, arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
+                                                        IN arg VARCHAR,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIME
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
+                                                        IN arg BPCHAR,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIME
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
+                                                        IN arg NVARCHAR2,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIME
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
+                                                            IN arg TEXT,
+                                                            IN try BOOL,
+													        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+DECLARE
+    v_res_datatype TEXT COLLATE "C";
+BEGIN
+    IF (typmod = -1) THEN
+        v_res_datatype := 'TIMESTAMP WITHOUT TIME ZONE';
+    ELSE
+        v_res_datatype := PG_CATALOG.format('TIMESTAMP WITHOUT TIME ZONE(%s)', typmod);
+    END IF;
+
+    IF try THEN
+	    RETURN sys.shark_try_conv_string_to_datetime2(v_res_datatype, arg, p_style);
+    ELSE
+        RETURN sys.shark_conv_string_to_datetime2(v_res_datatype, arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
+                                                            IN arg VARCHAR,
+                                                            IN try BOOL,
+													        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
+                                                            IN arg NVARCHAR2,
+                                                            IN try BOOL,
+													        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
+                                                            IN arg BPCHAR,
+                                                            IN try BOOL,
+													        IN p_style NUMERIC DEFAULT 0)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, try, p_style);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+
+-- Helper function to convert to binary or varbinary
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_string_to_varbinary(IN arg VARCHAR,
+                                                                      IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_string_to_varbinary(arg, p_style);
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;

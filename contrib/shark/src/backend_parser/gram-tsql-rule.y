@@ -635,8 +635,43 @@ unreserved_keyword:
 			| TSQL_NOEXPAND
 			| TSQL_PROC 
 			| TSQL_MINUTES_P
-			| TSQL_TEXTIMAGE_ON ;
+			| TSQL_TEXTIMAGE_ON
+			| TSQL_D
+			| TSQL_DAYOFYEAR
+			| TSQL_DW
+			| TSQL_DY
+			| TSQL_HH
+			| TSQL_M
+			| TSQL_MCS
+			| TSQL_MI
+			| TSQL_MICROSECOND
+			| TSQL_MILLISECOND
+			| TSQL_MM
+			| TSQL_MS
+			| TSQL_N
+			| TSQL_NS
+			| TSQL_Q
+			| TSQL_QQ
+			| TSQL_QUARTER
+			| TSQL_SS
+			| TSQL_S
+			| TSQL_WEEK
+			| TSQL_WEEKDAY
+			| TSQL_WK
+			| TSQL_WW
+			| TSQL_W
+			| TSQL_Y
+			| TSQL_YYYY
+			| TSQL_YY
+			| TSQL_DD
+			| TSQL_NANOSECOND ;
 
+reserved_keyword:
+			TSQL_TRY_CAST
+			| TSQL_TRY_CONVERT
+			| TSQL_CONVERT
+			| TSQL_DATEDIFF
+			| TSQL_DATEDIFF_BIG ;
 
 DBCCCheckIdentStmt:
 		DBCC CHECKIDENT '(' ColId_or_Sconst ',' NORESEED ')' opt_with_no_infomsgs
@@ -1219,6 +1254,38 @@ func_expr_common_subexpr:
 					securec_check(rc, "\0", "\0");
 
 					$$ = (Node *)makeFuncCall(TsqlSystemFuncName2(name), NIL, @1);
+				}
+			| TSQL_TRY_CAST '(' a_expr AS Typename ')'
+				{
+					$$ = TsqlFunctionTryCast($3, $5, @1);
+				}
+			| TSQL_CONVERT '(' Typename ',' a_expr ')'
+				{
+					$$ = TsqlFunctionConvert($3, $5, NULL, false, @1);
+				}
+			| TSQL_CONVERT '(' Typename ',' a_expr ',' a_expr ')'
+				{
+					$$ = TsqlFunctionConvert($3, $5, $7, false, @1);
+				}
+			| TSQL_TRY_CONVERT '(' Typename ',' a_expr ')'
+				{
+					$$ = TsqlFunctionConvert($3, $5, NULL, true, @1);
+				}
+			| TSQL_TRY_CONVERT '(' Typename ',' a_expr ',' a_expr ')'
+				{
+					$$ = TsqlFunctionConvert($3, $5, $7, true, @1);
+				}
+			| TSQL_DATEDIFF '(' datediff_arg ',' a_expr ',' a_expr ')'
+				{
+					$$ = (Node *)makeFuncCall(TsqlSystemFuncName2("datediff"),
+												list_make3(makeStringConst($3, @3), $5, $7),
+												@1);
+				}
+			| TSQL_DATEDIFF_BIG '(' datediff_arg ',' a_expr ',' a_expr ')'
+				{
+					$$ = (Node *)makeFuncCall(TsqlSystemFuncName2("datediff_big"),
+											   list_make3(makeStringConst($3, @3), $5, $7),
+											   @1);
 				}
 		;
 
@@ -1961,3 +2028,58 @@ tsql_UnsignedNumericOnly:   Iconst								{ $$ = makeInteger($1); }
 
 
 
+alter_table_cmd:
+	TSQL_CONVERT TO convert_charset opt_collate
+			{
+				AlterTableCmd *n = makeNode(AlterTableCmd);
+				n->subtype = AT_ConvertCharset;
+				CharsetCollateOptions *cc = makeNode(CharsetCollateOptions);
+				cc->cctype = OPT_CHARSETCOLLATE;
+				cc->charset = $3;
+				cc->collate = $4;
+				n->def = (Node *)cc;
+				$$ = (Node*)n;
+			}
+		;
+
+/* DATEDIFF() arguments
+ */
+datediff_arg:
+			IDENT									{ $$ = $1; }
+			| YEAR_P								{ $$ = "year"; }
+			| TSQL_YYYY                             { $$ = "year"; }
+			| TSQL_YY                               { $$ = "year"; }
+			| TSQL_QUARTER                          { $$ = "quarter"; }
+			| TSQL_Q                                { $$ = "quarter"; }
+			| TSQL_QQ                               { $$ = "quarter"; }
+			| MONTH_P								{ $$ = "month"; }
+			| TSQL_MM                               { $$ = "month"; }
+			| TSQL_M                                { $$ = "month"; }
+			| TSQL_DAYOFYEAR                        { $$ = "doy"; }
+			| TSQL_DY                               { $$ = "doy"; }
+			| TSQL_Y                                { $$ = "doy"; }
+			| TSQL_WEEK                             { $$ = "week"; }
+			| TSQL_WK                               { $$ = "week"; }
+			| TSQL_WW                               { $$ = "week"; }
+			| TSQL_WEEKDAY                          { $$ = "weekday"; }
+			| TSQL_DW                               { $$ = "weekday"; }
+			| TSQL_W                                { $$ = "weekday"; }
+			| DAY_P									{ $$ = "day"; }
+			| TSQL_DD								{ $$ = "day"; }
+			| TSQL_D								{ $$ = "day"; }
+			| HOUR_P								{ $$ = "hour"; }
+			| TSQL_HH                               { $$ = "hour"; }
+			| MINUTE_P								{ $$ = "minute"; }
+			| TSQL_MI                               { $$ = "minute"; }
+			| TSQL_N                                { $$ = "minute"; }
+			| SECOND_P								{ $$ = "second"; }
+			| TSQL_SS                               { $$ = "second"; }
+			| TSQL_S                                { $$ = "second"; }
+			| TSQL_MILLISECOND                      { $$ = "millisecond"; }
+			| TSQL_MS                               { $$ = "millisecond"; }
+			| TSQL_MICROSECOND                      { $$ = "microsecond"; }
+			| TSQL_MCS                              { $$ = "microsecond"; }
+			| TSQL_NANOSECOND                       { $$ = "nanosecond"; }
+			| TSQL_NS                               { $$ = "nanosecond"; }
+			| Sconst								{ $$ = $1; }
+		;

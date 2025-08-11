@@ -262,3 +262,28 @@ drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER
 
 drop function if exists sys.shark_conv_datetime_to_string(IN p_datatype TEXT, IN p_src_datatype TEXT, IN p_datetimeval TIMESTAMP(6) WITHOUT TIME ZONE, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_string_to_datetime2(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
+
+drop function if exists sys.shark_conv_helper_to_varchar(IN typename TEXT, IN arg ANYELEMENT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_to_varchar(IN typename TEXT, IN arg anyelement, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_money_to_string(IN p_datatype TEXT, IN p_moneyval NUMERIC, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_float_to_string(IN p_datatype TEXT, IN p_floatval FLOAT, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_datetime_to_string(IN p_datatype TEXT, IN p_src_datatype TEXT, IN p_datetimeval TIMESTAMP WITHOUT TIME ZONE, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_to_varchar(IN typename TEXT, IN arg TEXT, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_to_varchar(IN typename TEXT, IN arg anyelement, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_date_to_string(IN p_datatype TEXT, IN p_dateval DATE, IN p_style NUMERIC);
+
+drop function if exists sys.shark_try_conv_time_to_string(IN p_datatype TEXT, IN p_src_datatype TEXT, IN p_timeval TIME WITHOUT TIME ZONE, IN p_style NUMERIC);
+drop function if exists sys.shark_try_conv_string_to_datetime2(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_date(IN arg TEXT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_date(IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_date(IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_date(IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_date(IN arg anyelement, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_time(IN typmod INTEGER, IN arg TEXT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_time(IN typmod INTEGER, IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_time(IN typmod INTEGER, IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_time(IN typmod INTEGER, IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg TEXT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_datetime2(IN typmod INTEGER, IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
