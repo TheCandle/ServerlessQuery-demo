@@ -2411,3 +2411,856 @@ returns numeric(38, 0) as $$
     select sys.get_ident_current(tablename)::numeric(38, 0);
 $$
 language sql;
+
+
+CREATE TABLE sys.shark_syslanguages (
+    lang_id SMALLINT,
+    lang_name_pg VARCHAR(30),
+    lang_alias_pg VARCHAR(30),
+    lang_name_mssql VARCHAR(30),
+    lang_alias_mssql VARCHAR(30),
+    territory VARCHAR(50),
+    spec_culture VARCHAR(10),
+    lang_data_json JSON
+) WITH (OIDS = FALSE);
+GRANT SELECT ON sys.shark_syslanguages TO PUBLIC;
+
+/* Tsql DMLs*/
+INSERT INTO sys.shark_syslanguages
+     VALUES (1,
+             'ENGLISH',
+             'ENGLISH (UNITED STATES)',
+             'US_ENGLISH',
+             'ENGLISH',
+             'UNITED STATES',
+             'EN_US',
+             json_build_object('date_format', 'MDY',
+                                'date_first', 7,
+                                'months_names', json_build_array('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'),
+                                'months_shortnames', json_build_array('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'),
+                                'days_names', json_build_array('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
+                                'days_shortnames', json_build_array('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')));
+
+INSERT INTO sys.shark_syslanguages
+     VALUES (2,
+             'CHINESE (TRADITIONAL)',
+             'CHINESE (TRADITIONAL, CHINA)',
+             '繁體中文',
+             'TRADITIONAL CHINESE',
+             'CHINA',
+             'ZH_TW',
+             json_build_object('date_format', 'YMD',
+                                'date_first', 7,
+                                'months_names', json_build_array('一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'),
+                                'months_shortnames', json_build_array('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'),
+                                'months_extranames', json_build_array('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'),
+                                'months_extrashortnames', json_build_array('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'),
+                                'days_names', json_build_array('星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'),
+                                'days_shortnames', json_build_array('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'),
+                                'days_extrashortnames', json_build_array('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')));
+
+
+INSERT INTO sys.shark_syslanguages
+     VALUES (3,
+             'CHINESE (SIMPLIFIED)',
+             'CHINESE (SIMPLIFIED, CHINA)',
+             '简体中文',
+             'SIMPLIFIED CHINESE',
+             'CHINA',
+             'ZH_CN',
+             json_build_object('date_format', 'YMD',
+                                'date_first', 7,
+                                'months_names', json_build_array('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'),
+                                'months_shortnames', json_build_array('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'),
+                                'months_extranames', json_build_array('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'),
+                                'months_extrashortnames', json_build_array('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'),
+                                'days_names', json_build_array('星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'),
+                                'days_shortnames', json_build_array('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'),
+                                'days_extrashortnames', json_build_array('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')));
+
+INSERT INTO sys.shark_syslanguages
+     VALUES (4,
+             'HIJRI',
+             'HIJRI (ISLAMIC)',
+             'HIJRI',
+             'ISLAMIC',
+             'ISLAMIC',
+             'HI_IS',
+             json_build_object('date_format', 'DMY',
+                                'date_first', 1,
+                                'months_names', json_build_array('محرم', 'صفر', 'ربيع الاول', 'ربيع الثاني', 'جمادى الاولى', 'جمادى الثانية', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'),
+                                'months_shortnames', json_build_array('محرم', 'صفر', 'ربيع الاول', 'ربيع الثاني', 'جمادى الاولى', 'جمادى الثانية', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'),
+                                'months_extranames', json_build_array('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'),
+                                'months_extrashortnames', json_build_array('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'),
+                                'days_names', json_build_array('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
+                                'days_shortnames', json_build_array('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')));
+
+
+-- LOG10 implmentation
+CREATE OR REPLACE FUNCTION sys.log10(IN arg1 double precision)
+RETURNS double precision  AS '$libdir/shark','numeric_log10' LANGUAGE C IMMUTABLE STRICT;
+
+-- ATN2 implmentation
+CREATE OR REPLACE FUNCTION sys.atn2(IN x double precision, IN y double precision) RETURNS double precision
+AS
+$$
+DECLARE
+    res double precision;
+BEGIN
+    IF x = 0 AND y = 0 THEN
+        RAISE EXCEPTION 'An invalid floating point operation occurred.';
+    ELSE
+        res = PG_CATALOG.atan2(x, y);
+        RETURN res;
+    END IF;
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.atn2(IN x money, IN y money) RETURNS double precision
+AS
+$$
+BEGIN
+    RETURN sys.atn2(x::double precision, y::double precision);
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.atn2(IN x varchar, IN y varchar) RETURNS double precision
+AS
+$$
+BEGIN
+    RETURN sys.atn2(x::double precision, y::double precision);
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE RETURNS NULL ON NULL INPUT;
+
+-- ISNULL implmentation
+CREATE FUNCTION sys.isnull(text,text) RETURNS text AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(boolean,boolean) RETURNS boolean AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(smallint,smallint) RETURNS smallint AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(integer,integer) RETURNS integer AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(bigint,bigint) RETURNS bigint AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(real,real) RETURNS real AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(double precision, double precision) RETURNS double precision AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(numeric,numeric) RETURNS numeric AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(date, date) RETURNS date AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(timestamp,timestamp) RETURNS timestamp AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE FUNCTION sys.isnull(timestamp with time zone,timestamp with time zone) RETURNS timestamp with time zone AS $$
+  SELECT COALESCE($1,$2);
+$$
+LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION sys.charindex(expressionToFind PG_CATALOG.TEXT,
+										 expressionToSearch PG_CATALOG.TEXT,
+										 start_location INTEGER DEFAULT 0)
+RETURNS INTEGER AS
+$BODY$
+SELECT
+CASE
+WHEN expressionToFind = '' THEN
+    0
+WHEN start_location <= 0 THEN
+	strpos(expressionToSearch, expressionToFind)
+ELSE
+	CASE
+	WHEN strpos(substr(expressionToSearch, start_location), expressionToFind) = 0 THEN
+		0
+	ELSE
+		strpos(substr(expressionToSearch, start_location), expressionToFind) + start_location - 1
+	END
+END;
+$BODY$
+STRICT
+LANGUAGE SQL IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_try_conv_string_to_varbinary(IN arg VARCHAR,
+                                                                      IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_string_to_varbinary(arg, p_style);
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varbinary(IN typmod INTEGER,
+                                                                  IN arg anyelement,
+                                                                  IN try BOOL,
+                                                                  IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+DECLARE result sys.varbinary;
+BEGIN
+    IF try THEN
+        RETURN sys.shark_try_conv_to_varbinary(typmod, arg, p_style);
+    ELSE
+        IF pg_typeof(arg) IN ('text'::regtype, 'nvarchar2'::regtype, 'bpchar'::regtype) THEN
+            RETURN sys.shark_conv_string_to_varbinary(arg, p_style);
+        ELSE
+            IF typmod = -1 THEN
+                RETURN CAST(arg as sys.varbinary);
+            ELSE
+                EXECUTE format('SELECT CAST($1 as sys.varbinary(%s))', typmod) INTO result USING arg;
+                RETURN result;
+            END IF;
+        END IF;
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varbinary(IN typmod INTEGER,
+                                                                  IN arg VARCHAR,
+                                                                  IN try BOOL,
+                                                                  IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+BEGIN
+    IF try THEN
+        RETURN sys.shark_try_conv_string_to_varbinary(arg, p_style);
+    ELSE
+        RETURN sys.shark_conv_string_to_varbinary(arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_string_to_varbinary(IN input_value VARCHAR, IN style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+DECLARE
+    result bytea;
+BEGIN
+    IF style = 0 THEN
+        RETURN CAST(input_value AS sys.varbinary);
+    ELSIF style = 1 THEN
+        -- Handle hexadecimal conversion
+        IF (PG_CATALOG.left(input_value, 2) = '0x' COLLATE "C" AND PG_CATALOG.length(input_value) % 2 = 0) THEN
+            result := decode(substring(input_value from 3), 'hex');
+        ELSE
+            RAISE EXCEPTION 'Error converting data type varchar to varbinary.';
+        END IF;
+    ELSIF style = 2 THEN
+        IF PG_CATALOG.left(input_value, 2) = '0x' COLLATE "C" THEN
+            RAISE EXCEPTION 'Error converting data type varchar to varbinary.';
+        ELSE
+            result := decode(input_value, 'hex');
+        END IF;
+    ELSE
+        RAISE EXCEPTION 'The style % is not supported for conversions from varchar to varbinary.', style;
+    END IF;
+
+    RETURN CAST(result AS sys.varbinary);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT;
+
+CREATE OR REPLACE FUNCTION sys.datetimefromparts(IN p_year NUMERIC,
+                                                               IN p_month NUMERIC,
+                                                               IN p_day NUMERIC,
+                                                               IN p_hour NUMERIC,
+                                                               IN p_minute NUMERIC,
+                                                               IN p_seconds NUMERIC,
+                                                               IN p_milliseconds NUMERIC)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+DECLARE
+    v_err_message VARCHAR;
+    v_calc_seconds NUMERIC;
+    v_milliseconds SMALLINT;
+    v_resdatetime TIMESTAMP WITHOUT TIME ZONE;
+BEGIN
+    -- Check if arguments are out of range
+    IF ((floor(p_year)::SMALLINT NOT BETWEEN 1753 AND 9999) OR
+        (floor(p_month)::SMALLINT NOT BETWEEN 1 AND 12) OR
+        (floor(p_day)::SMALLINT NOT BETWEEN 1 AND 31) OR
+        (floor(p_hour)::SMALLINT NOT BETWEEN 0 AND 23) OR
+        (floor(p_minute)::SMALLINT NOT BETWEEN 0 AND 59) OR
+        (floor(p_seconds)::SMALLINT NOT BETWEEN 0 AND 59) OR
+        (floor(p_milliseconds)::SMALLINT NOT BETWEEN 0 AND 999))
+    THEN
+        RAISE invalid_datetime_format;
+    END IF;
+
+    v_milliseconds := sys.shark_round_fractseconds(p_milliseconds::INTEGER);
+
+    v_calc_seconds := pg_catalog.format('%s.%s',
+                             floor(p_seconds)::SMALLINT,
+                             CASE v_milliseconds
+                                WHEN 1000 THEN '0'
+                                ELSE lpad(v_milliseconds::VARCHAR, 3, '0')
+                             END)::NUMERIC;
+
+    v_resdatetime := make_timestamp(floor(p_year)::SMALLINT,
+                                    floor(p_month)::SMALLINT,
+                                    floor(p_day)::SMALLINT,
+                                    floor(p_hour)::SMALLINT,
+                                    floor(p_minute)::SMALLINT,
+                                    v_calc_seconds);
+    RETURN CASE
+              WHEN (v_milliseconds != 1000) THEN v_resdatetime
+              ELSE v_resdatetime + INTERVAL '1 second'
+           END;
+EXCEPTION
+    WHEN invalid_datetime_format THEN
+        RAISE USING MESSAGE := 'Cannot construct data type timestamp with time zone, some of the arguments have values which are not valid.',
+                    DETAIL := 'Possible use of incorrect value of date or time part (which lies outside of valid range).',
+                    HINT := 'Check each input argument belongs to the valid range and try again.';
+
+    WHEN numeric_value_out_of_range THEN
+        GET STACKED DIAGNOSTICS v_err_message = MESSAGE_TEXT;
+        v_err_message := pg_catalog.upper(split_part(v_err_message, ' ', 1));
+
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to cast to %s data type.', v_err_message),
+                    DETAIL := pg_catalog.format('Source value is out of %s data type range.', v_err_message),
+                    HINT := pg_catalog.format('Correct the source value you are trying to cast to %s data type and try again.',
+                                   v_err_message);
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.datetimefromparts(IN p_year TEXT,
+                                                               IN p_month TEXT,
+                                                               IN p_day TEXT,
+                                                               IN p_hour TEXT,
+                                                               IN p_minute TEXT,
+                                                               IN p_seconds TEXT,
+                                                               IN p_milliseconds TEXT)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+DECLARE
+    v_err_message VARCHAR;
+BEGIN
+    RETURN sys.datetimefromparts(p_year::NUMERIC, p_month::NUMERIC, p_day::NUMERIC,
+                                               p_hour::NUMERIC, p_minute::NUMERIC,
+                                               p_seconds::NUMERIC, p_milliseconds::NUMERIC);
+EXCEPTION
+    WHEN invalid_text_representation THEN
+        GET STACKED DIAGNOSTICS v_err_message = MESSAGE_TEXT;
+        v_err_message := substring(pg_catalog.lower(v_err_message), 'numeric\:\s\"(.*)\"');
+
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to convert "%s" value to NUMERIC data type.', v_err_message),
+                    DETAIL := 'Supplied string value contains illegal characters.',
+                    HINT := 'Correct supplied value, remove all illegal characters and try again.';
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_round_fractseconds(IN p_fractseconds NUMERIC)
+RETURNS INTEGER
+AS
+$BODY$
+DECLARE
+   v_modpart INTEGER;
+   v_decpart INTEGER;
+   v_fractseconds INTEGER;
+BEGIN
+    v_fractseconds := floor(p_fractseconds)::INTEGER;
+    v_modpart := v_fractseconds % 10;
+    v_decpart := v_fractseconds - v_modpart;
+
+    RETURN CASE
+              WHEN (v_modpart BETWEEN 0 AND 1) THEN v_decpart
+              WHEN (v_modpart BETWEEN 2 AND 4) THEN v_decpart + 3
+              WHEN (v_modpart BETWEEN 5 AND 8) THEN v_decpart + 7
+              ELSE v_decpart + 10
+           END;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_round_fractseconds(IN p_fractseconds TEXT)
+RETURNS INTEGER
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_round_fractseconds(p_fractseconds::NUMERIC);
+EXCEPTION
+    WHEN invalid_text_representation THEN
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to convert "%s" value to NUMERIC data type.', pg_catalog.btrim(p_fractseconds)),
+                    DETAIL := 'Passed argument value contains illegal characters.',
+                    HINT := 'Correct passed argument value, remove all illegal characters.';
+
+
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_greg_to_hijri(IN p_day NUMERIC,
+                                                                IN p_month NUMERIC,
+                                                                IN p_year NUMERIC)
+RETURNS DATE
+AS
+$BODY$
+DECLARE
+    v_day SMALLINT;
+    v_month SMALLINT;
+    v_year INTEGER;
+    v_jdnum DOUBLE PRECISION;
+    v_lnum DOUBLE PRECISION;
+    v_inum DOUBLE PRECISION;
+    v_nnum DOUBLE PRECISION;
+    v_jnum DOUBLE PRECISION;
+BEGIN
+    v_day := floor(p_day)::SMALLINT;
+    v_month := floor(p_month)::SMALLINT;
+    v_year := floor(p_year)::INTEGER;
+
+    IF ((sign(v_day) = -1) OR (sign(v_month) = -1) OR (sign(v_year) = -1))
+    THEN
+        RAISE invalid_character_value_for_cast;
+    ELSIF (v_year = 0) THEN
+        RAISE null_value_not_allowed;
+    END IF;
+
+    IF ((p_year > 1582) OR ((p_year = 1582) AND (p_month > 10)) OR ((p_year = 1582) AND (p_month = 10) AND (p_day > 14)))
+    THEN
+        v_jdnum := sys.shark_get_int_part((1461 * (p_year + 4800 + sys.shark_get_int_part((p_month - 14) / 12))) / 4) +
+                   sys.shark_get_int_part((367 * (p_month - 2 - 12 * (sys.shark_get_int_part((p_month - 14) / 12)))) / 12) -
+                   sys.shark_get_int_part((3 * (sys.shark_get_int_part((p_year + 4900 +
+                   sys.shark_get_int_part((p_month - 14) / 12)) / 100))) / 4) + p_day - 32075;
+    ELSE
+        v_jdnum := 367 * p_year - sys.shark_get_int_part((7 * (p_year + 5001 +
+                   sys.shark_get_int_part((p_month - 9) / 7))) / 4) +
+                   sys.shark_get_int_part((275 * p_month) / 9) + p_day + 1729777;
+    END IF;
+
+    v_lnum := v_jdnum - 1948440 + 10632;
+    v_nnum := sys.shark_get_int_part((v_lnum - 1) / 10631);
+    v_lnum := v_lnum - 10631 * v_nnum + 354;
+    v_jnum := (sys.shark_get_int_part((10985 - v_lnum) / 5316)) * (sys.shark_get_int_part((50 * v_lnum) / 17719)) +
+              (sys.shark_get_int_part(v_lnum / 5670)) * (sys.shark_get_int_part((43 * v_lnum) / 15238));
+    v_lnum := v_lnum - (sys.shark_get_int_part((30 - v_jnum) / 15)) * (sys.shark_get_int_part((17719 * v_jnum) / 50)) -
+              (sys.shark_get_int_part(v_jnum / 16)) * (sys.shark_get_int_part((15238 * v_jnum) / 43)) + 29;
+
+    v_month := sys.shark_get_int_part((24 * v_lnum) / 709);
+    v_day := v_lnum - sys.shark_get_int_part((709 * v_month) / 24);
+    v_year := 30 * v_nnum + v_jnum - 30;
+
+    RETURN to_date(pg_catalog.concat_ws('.', v_day, v_month, v_year), 'DD.MM.YYYY');
+EXCEPTION
+    WHEN invalid_character_value_for_cast THEN
+        RAISE USING MESSAGE := 'Could not convert Gregorian to Hijri date if any part of the date is negative.',
+                    DETAIL := 'Some of the supplied date parts (day, month, year) is negative.',
+                    HINT := 'Change the value of the date part (day, month, year) wich was found to be negative.';
+
+    WHEN null_value_not_allowed THEN
+        RAISE USING MESSAGE := 'Could not convert Gregorian to Hijri date if year value is equal to zero.',
+                    DETAIL := 'Supplied year value is equal to zero.',
+                    HINT := 'Change the value of the year so that it is greater than zero.';
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_greg_to_hijri(IN p_datetimeval TIMESTAMP WITHOUT TIME ZONE)
+RETURNS TIMESTAMP WITHOUT TIME ZONE
+AS
+$BODY$
+DECLARE
+    v_hijri_date DATE;
+BEGIN
+    v_hijri_date := sys.shark_conv_greg_to_hijri(extract(day from p_datetimeval)::SMALLINT,
+                                                         extract(month from p_datetimeval)::SMALLINT,
+                                                         extract(year from p_datetimeval)::INTEGER);
+
+    RETURN to_timestamp(pg_catalog.format('%s %s', to_char(v_hijri_date, 'DD.MM.YYYY'),
+                                        to_char(p_datetimeval, ' HH24:MI:SS.US')),
+                        'DD.MM.YYYY HH24:MI:SS.US');
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_greg_to_hijri(IN p_day TEXT,
+                                                                IN p_month TEXT,
+                                                                IN p_year TEXT)
+RETURNS DATE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_greg_to_hijri(p_day::NUMERIC,
+                                                p_month::NUMERIC,
+                                                p_year::NUMERIC);
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_conv_greg_to_hijri(IN p_dateval DATE)
+RETURNS DATE
+AS
+$BODY$
+BEGIN
+    RETURN sys.shark_conv_greg_to_hijri(extract(day from p_dateval)::NUMERIC,
+                                                extract(month from p_dateval)::NUMERIC,
+                                                extract(year from p_dateval)::NUMERIC);
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_get_microsecs_from_fractsecs_v2(IN p_fractsecs TEXT,
+                                                                          IN p_scale NUMERIC DEFAULT 7)
+RETURNS VARCHAR
+AS
+$BODY$
+DECLARE
+    v_scale SMALLINT;
+    v_decplaces INTEGER;
+    v_fractsecs VARCHAR COLLATE "C";
+    v_pureplaces VARCHAR COLLATE "C";
+    v_rnd_fractsecs INTEGER;
+    v_fractsecs_len INTEGER;
+    v_pureplaces_len INTEGER;
+    v_err_message VARCHAR COLLATE "C";
+BEGIN
+    v_fractsecs := pg_catalog.btrim(p_fractsecs);
+    v_fractsecs_len := char_length(v_fractsecs);
+    v_scale := floor(p_scale)::SMALLINT;
+
+    IF (v_fractsecs_len < 7) THEN
+        v_fractsecs := rpad(v_fractsecs, 7, '0');
+        v_fractsecs_len := char_length(v_fractsecs);
+    END IF;
+
+    v_pureplaces := trim(leading '0' from v_fractsecs);
+    v_pureplaces_len := char_length(v_pureplaces);
+
+    v_decplaces := v_fractsecs_len - v_pureplaces_len;
+
+    v_rnd_fractsecs := round(v_fractsecs::INTEGER, (v_pureplaces_len - (v_scale - v_decplaces)) * (-1));
+
+    IF (char_length(v_rnd_fractsecs::TEXT) > v_fractsecs_len) THEN
+        RETURN '-1';
+    END IF;
+
+    v_fractsecs := lpad(v_rnd_fractsecs::TEXT, v_fractsecs_len, '0');
+
+    RETURN substring(v_fractsecs, 1, CASE
+                                        WHEN (v_scale >= 7) THEN 6
+                                        ELSE v_scale
+                                     END);
+EXCEPTION
+    WHEN invalid_text_representation THEN
+        GET STACKED DIAGNOSTICS v_err_message = MESSAGE_TEXT;
+        v_err_message := substring(pg_catalog.lower(v_err_message), 'integer\:\s\"(.*)\"');
+
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to convert "%s" value to SMALLINT data type.', v_err_message),
+                    DETAIL := 'Supplied value contains illegal characters.',
+                    HINT := 'Correct supplied value, remove all illegal characters.';
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_get_int_part(IN p_srcnumber DOUBLE PRECISION)
+RETURNS DOUBLE PRECISION
+AS
+$BODY$
+BEGIN
+    RETURN CASE
+              WHEN (p_srcnumber < -0.0000001) THEN ceil(p_srcnumber - 0.0000001)
+              ELSE floor(p_srcnumber + 0.0000001)
+           END;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_get_full_year(IN p_short_year TEXT,
+                                                           IN p_base_century TEXT DEFAULT '',
+                                                           IN p_year_cutoff NUMERIC DEFAULT 49)
+RETURNS VARCHAR
+AS
+$BODY$
+DECLARE
+    v_err_message VARCHAR;
+    v_full_year SMALLINT;
+    v_short_year SMALLINT;
+    v_base_century SMALLINT;
+    v_result_param_set JSON;
+    v_full_year_res_json JSON;
+BEGIN
+    v_short_year := p_short_year::SMALLINT;
+
+    BEGIN
+        v_full_year_res_json := nullif(current_setting('sys.full_year_res_json'), '')::JSON;
+    EXCEPTION
+        WHEN undefined_object THEN
+        v_full_year_res_json := NULL;
+    END;
+
+    SELECT result
+      INTO v_full_year
+      FROM json_to_recordset(v_full_year_res_json, true) AS result_set (param1 SMALLINT,
+                                                                    param2 TEXT,
+                                                                    param3 NUMERIC,
+                                                                    result VARCHAR)
+     WHERE param1 = v_short_year
+       AND param2 = p_base_century
+       AND param3 = p_year_cutoff;
+
+    IF (v_full_year IS NULL)
+    THEN
+        IF (v_short_year <= 99)
+        THEN
+            v_base_century := CASE
+                                 WHEN (p_base_century ~ '^\s*([1-9]{1,2})\s*$') THEN pg_catalog.concat(pg_catalog.btrim(p_base_century), '00')::SMALLINT
+                                 ELSE trunc(extract(year from current_date)::NUMERIC, -2)
+                              END;
+
+            v_full_year = v_base_century + v_short_year;
+            v_full_year = CASE
+                             WHEN (v_short_year::NUMERIC > p_year_cutoff) THEN v_full_year - 100
+                             ELSE v_full_year
+                          END;
+        ELSE v_full_year := v_short_year;
+        END IF;
+
+        v_result_param_set := json_build_object('param1', v_short_year,
+                                                 'param2', p_base_century,
+                                                 'param3', p_year_cutoff,
+                                                 'result', v_full_year);
+        v_full_year_res_json := CASE
+                                    WHEN (v_full_year_res_json IS NULL) THEN json_build_array(v_result_param_set)
+                                    ELSE v_full_year_res_json || v_result_param_set
+                                 END;
+
+        PERFORM set_config('sys.full_year_res_json',
+                           v_full_year_res_json::TEXT,
+                           FALSE);
+    END IF;
+
+    RETURN v_full_year;
+EXCEPTION
+    WHEN invalid_text_representation THEN
+        GET STACKED DIAGNOSTICS v_err_message = MESSAGE_TEXT;
+        v_err_message := substring(pg_catalog.lower(v_err_message), 'integer\:\s\"(.*)\"');
+
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to convert "%s" value to SMALLINT data type.',
+                                      v_err_message),
+                    DETAIL := 'Supplied value contains illegal characters.',
+                    HINT := 'Correct supplied value, remove all illegal characters.';
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_get_monthnum_by_name(IN p_monthname TEXT,
+                                                                  IN p_lang_metadata_json JSON)
+RETURNS VARCHAR
+AS
+$BODY$
+DECLARE
+    v_monthname TEXT;
+    v_monthnum SMALLINT;
+BEGIN
+    v_monthname := pg_catalog.lower(pg_catalog.btrim(p_monthname));
+
+    v_monthnum := array_position(ARRAY(SELECT pg_catalog.lower(json_array_elements_text(p_lang_metadata_json -> 'months_shortnames'))), v_monthname);
+
+    v_monthnum := coalesce(v_monthnum,
+                           array_position(ARRAY(SELECT pg_catalog.lower(json_array_elements_text(p_lang_metadata_json -> 'months_names'))), v_monthname));
+
+    v_monthnum := coalesce(v_monthnum,
+                           array_position(ARRAY(SELECT pg_catalog.lower(json_array_elements_text(p_lang_metadata_json -> 'months_extrashortnames'))), v_monthname));
+
+    v_monthnum := coalesce(v_monthnum,
+                           array_position(ARRAY(SELECT pg_catalog.lower(json_array_elements_text(p_lang_metadata_json -> 'months_extranames'))), v_monthname));
+
+    IF (v_monthnum IS NULL) THEN
+        RAISE datetime_field_overflow;
+    END IF;
+
+    RETURN v_monthnum;
+EXCEPTION
+    WHEN datetime_field_overflow THEN
+        RAISE USING MESSAGE := pg_catalog.format('Can not convert value "%s" to a correct month number.',
+                                      pg_catalog.btrim(p_monthname)),
+                    DETAIL := 'Supplied month name is not valid.',
+                    HINT := 'Correct supplied month name value and try again.';
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE OR REPLACE FUNCTION sys.shark_get_timeunit_from_string(IN p_timepart TEXT,
+                                                                      IN p_timeunit TEXT)
+RETURNS VARCHAR
+AS
+$BODY$
+DECLARE
+    v_hours VARCHAR COLLATE "C";
+    v_minutes VARCHAR COLLATE "C";
+    v_seconds VARCHAR COLLATE "C";
+    v_fractsecs VARCHAR COLLATE "C";
+    v_sign VARCHAR COLLATE "C";
+    v_offhours VARCHAR COLLATE "C";
+    v_offminutes VARCHAR COLLATE "C";
+    v_daypart VARCHAR COLLATE "C";
+    v_timepart VARCHAR COLLATE "C";
+    v_offset VARCHAR COLLATE "C";
+    v_timeunit VARCHAR COLLATE "C";
+    v_err_message VARCHAR COLLATE "C";
+    v_timeunit_mask VARCHAR COLLATE "C";
+    v_regmatch_groups TEXT[];
+    AMPM_REGEXP CONSTANT VARCHAR COLLATE "C" := '\s*([AP]M)';
+    TIMEUNIT_REGEXP CONSTANT VARCHAR COLLATE "C" := '\s*(\d{1,2})\s*';
+    FRACTSECS_REGEXP CONSTANT VARCHAR COLLATE "C" := '\s*(\d{1,9})';
+    TIME_OFFSET_REGEXP CONSTANT VARCHAR COLLATE "C" := pg_catalog.concat('((\-|\+)', TIMEUNIT_REGEXP, '\:', TIMEUNIT_REGEXP, '|Z)');
+    HHMMSSFS_REGEXP CONSTANT VARCHAR COLLATE "C" := pg_catalog.concat('^', TIMEUNIT_REGEXP,
+                                               '\:', TIMEUNIT_REGEXP,
+                                               '\:', TIMEUNIT_REGEXP,
+                                               '(?:\.|\:)', FRACTSECS_REGEXP, '$');
+    HHMMSS_REGEXP CONSTANT VARCHAR COLLATE "C" := pg_catalog.concat('^', TIMEUNIT_REGEXP, '\:', TIMEUNIT_REGEXP, '\:', TIMEUNIT_REGEXP, '$');
+    HHMMFS_REGEXP CONSTANT VARCHAR COLLATE "C" := pg_catalog.concat('^', TIMEUNIT_REGEXP, '\:', TIMEUNIT_REGEXP, '\.', FRACTSECS_REGEXP, '$');
+    HHMM_REGEXP CONSTANT VARCHAR COLLATE "C" := pg_catalog.concat('^', TIMEUNIT_REGEXP, '\:', TIMEUNIT_REGEXP, '$');
+    HH_REGEXP CONSTANT VARCHAR COLLATE "C" := pg_catalog.concat('^', TIMEUNIT_REGEXP, '$');
+BEGIN
+    v_timepart := pg_catalog.upper(pg_catalog.btrim(p_timepart));
+    v_timeunit := pg_catalog.upper(pg_catalog.btrim(p_timeunit));
+
+    v_daypart := substring(v_timepart, AMPM_REGEXP);
+    v_offset := substring(v_timepart, TIME_OFFSET_REGEXP);
+    v_timepart := pg_catalog.btrim(regexp_replace(v_timepart, AMPM_REGEXP, ''));
+    v_timepart := pg_catalog.btrim(regexp_replace(v_timepart, TIME_OFFSET_REGEXP, ''));
+
+    v_timeunit_mask :=
+        CASE
+           WHEN (v_timepart ~* HHMMSSFS_REGEXP) THEN HHMMSSFS_REGEXP
+           WHEN (v_timepart ~* HHMMSS_REGEXP) THEN HHMMSS_REGEXP
+           WHEN (v_timepart ~* HHMMFS_REGEXP) THEN HHMMFS_REGEXP
+           WHEN (v_timepart ~* HHMM_REGEXP) THEN HHMM_REGEXP
+           WHEN (v_timepart ~* HH_REGEXP) THEN HH_REGEXP
+        END;
+
+    v_regmatch_groups := regexp_matches(v_timepart, v_timeunit_mask, 'gi');
+
+    v_hours := v_regmatch_groups[1];
+    v_minutes := v_regmatch_groups[2];
+
+    IF (v_timepart ~* HHMMFS_REGEXP) THEN
+        v_fractsecs := v_regmatch_groups[3];
+    ELSE
+        v_seconds := v_regmatch_groups[3];
+        v_fractsecs := v_regmatch_groups[4];
+    END IF;
+
+    v_regmatch_groups := regexp_matches(v_offset, TIME_OFFSET_REGEXP, 'gi');
+
+    v_sign := coalesce(v_regmatch_groups[2], '+');
+    v_offhours := coalesce(v_regmatch_groups[3], '0');
+    v_offminutes := coalesce(v_regmatch_groups[4], '0');
+
+    IF (v_timeunit = 'HOURS' AND v_daypart IS NOT NULL)
+    THEN
+        IF ((v_daypart = 'AM' AND v_hours::SMALLINT NOT BETWEEN 0 AND 12) OR
+            (v_daypart = 'PM' AND v_hours::SMALLINT NOT BETWEEN 1 AND 23))
+        THEN
+            RAISE numeric_value_out_of_range;
+        ELSIF (v_daypart = 'PM' AND v_hours::SMALLINT < 12) THEN
+            v_hours := (v_hours::SMALLINT + 12)::VARCHAR;
+        ELSIF (v_daypart = 'AM' AND v_hours::SMALLINT = 12) THEN
+            v_hours := (v_hours::SMALLINT - 12)::VARCHAR;
+        END IF;
+    END IF;
+
+    RETURN CASE v_timeunit
+              WHEN 'HOURS' THEN v_hours
+              WHEN 'MINUTES' THEN v_minutes
+              WHEN 'SECONDS' THEN v_seconds
+              WHEN 'FRACTSECONDS' THEN v_fractsecs
+              WHEN 'OFFHOURS' THEN v_offhours
+              WHEN 'OFFMINUTES' THEN v_offminutes
+              WHEN 'OFFSIGN' THEN v_sign
+           END;
+EXCEPTION
+    WHEN numeric_value_out_of_range THEN
+        RAISE USING MESSAGE := 'Could not extract correct hour value due to it''s inconsistency with AM|PM day part mark.',
+                    DETAIL := 'Extracted hour value doesn''t fall in correct day part mark range: 0..12 for "AM" or 1..23 for "PM".',
+                    HINT := 'Correct a hour value in the source string or remove AM|PM day part mark out of it.';
+
+    WHEN invalid_text_representation THEN
+        GET STACKED DIAGNOSTICS v_err_message = MESSAGE_TEXT;
+        v_err_message := substring(pg_catalog.lower(v_err_message), 'integer\:\s\"(.*)\"');
+
+        RAISE USING MESSAGE := pg_catalog.format('Error while trying to convert "%s" value to SMALLINT data type.', v_err_message),
+                    DETAIL := 'Supplied value contains illegal characters.',
+                    HINT := 'Correct supplied value, remove all illegal characters.';
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;

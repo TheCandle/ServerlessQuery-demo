@@ -18,6 +18,7 @@ extern "C" Datum suser_name(PG_FUNCTION_ARGS);
 extern "C" Datum suser_id(PG_FUNCTION_ARGS);
 extern "C" Datum get_scope_identity(PG_FUNCTION_ARGS);
 extern "C" Datum get_ident_current(PG_FUNCTION_ARGS);
+extern "C" Datum numeric_log10(PG_FUNCTION_ARGS);
 static void fetch_cursor_end_hook(int fetch_status);
 static void rowcount_hook(int64 rowcount);
 extern void set_procid(Oid oid);

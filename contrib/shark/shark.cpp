@@ -7,6 +7,7 @@
 #include "commands/sequence.h"
 #include "utils/builtins.h"
 #include "utils/typcache.h"
+#include "utils/numeric.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_authid.h"
 #include "shark.h"
@@ -577,4 +578,22 @@ static int128 get_last_value_from_seq(Oid seqid)
     pfree(values);
     pfree(nulls);
     return last_value;
+}
+
+PG_FUNCTION_INFO_V1(numeric_log10);
+Datum numeric_log10(PG_FUNCTION_ARGS)
+{
+    float8 arg1 = PG_GETARG_FLOAT8(0);
+    float8 result = 0;
+    Numeric arg1_numeric = 0;
+    Numeric arg2_numeric = 0;
+    Numeric result_numeric = 0;
+
+    arg1_numeric = DatumGetNumeric(DirectFunctionCall1(float8_numeric, Float8GetDatum(arg1)));
+    arg2_numeric = DatumGetNumeric(DirectFunctionCall1(int4_numeric, 10));
+    result_numeric =
+        DatumGetNumeric(DirectFunctionCall2(numeric_log, NumericGetDatum(arg2_numeric), NumericGetDatum(arg1_numeric)));
+    result = DatumGetFloat8(DirectFunctionCall1(numeric_float8, NumericGetDatum(result_numeric)));
+
+    PG_RETURN_FLOAT8(result);
 }
