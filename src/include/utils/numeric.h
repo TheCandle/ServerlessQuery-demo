@@ -201,6 +201,7 @@ extern Datum numtodsinterval(PG_FUNCTION_ARGS);
 extern int cmp_numerics(Numeric num1, Numeric num2);
 extern int128 numeric_int16_internal(Numeric num);
 extern char* output_numeric_out(Numeric num);
+extern Datum numeric_scale(PG_FUNCTION_ARGS);
 
 //
 // Numeric Compression Codes Area
