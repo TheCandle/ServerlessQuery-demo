@@ -196,3 +196,16 @@ drop function if exists sys.shark_get_int_part(IN p_srcnumber DOUBLE PRECISION);
 drop function if exists sys.shark_get_full_year(IN p_short_year TEXT, IN p_base_century TEXT, IN p_year_cutoff NUMERIC);
 drop function if exists sys.shark_get_monthnum_by_name(IN p_monthname TEXT, IN p_lang_metadata_json JSON);
 drop function if exists sys.shark_get_timeunit_from_string(IN p_timepart TEXT, IN p_timeunit TEXT);
+
+drop function if exists sys.datediff_internal(IN datepart PG_CATALOG.TEXT, IN startdate anyelement, IN enddate anyelement);
+drop function if exists sys.datediff_internal_big(IN datepart PG_CATALOG.TEXT, IN startdate anyelement, IN enddate anyelement);
+drop function if exists sys.datediff(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.date, IN enddate PG_CATALOG.date);
+drop function if exists sys.datediff(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.timestamp, IN enddate PG_CATALOG.timestamp);
+drop function if exists sys.datediff(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.timestamptz, IN enddate PG_CATALOG.timestamptz);
+drop function if exists sys.datediff(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.smalldatetime, IN enddate PG_CATALOG.smalldatetime);
+drop function if exists sys.datediff(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.time, IN enddate PG_CATALOG.time);
+drop function if exists sys.datediff_big(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.date, IN enddate PG_CATALOG.date);
+drop function if exists sys.datediff_big(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.time, IN enddate PG_CATALOG.time);
+drop function if exists sys.datediff_big(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.timestamp, IN enddate PG_CATALOG.timestamp);
+drop function if exists sys.datediff_big(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.timestamptz, IN enddate PG_CATALOG.timestamptz);
+drop function if exists sys.datediff_big(IN datepart PG_CATALOG.TEXT, IN startdate PG_CATALOG.smalldatetime, IN enddate PG_CATALOG.smalldatetime);
