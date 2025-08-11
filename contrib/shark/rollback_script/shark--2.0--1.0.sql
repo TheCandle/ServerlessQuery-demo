@@ -259,3 +259,6 @@ drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER
 drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg VARCHAR, IN try BOOL, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg NVARCHAR2, IN try BOOL, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER, IN arg BPCHAR, IN try BOOL, IN p_style NUMERIC);
+
+drop function if exists sys.shark_conv_datetime_to_string(IN p_datatype TEXT, IN p_src_datatype TEXT, IN p_datetimeval TIMESTAMP(6) WITHOUT TIME ZONE, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_string_to_datetime2(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
