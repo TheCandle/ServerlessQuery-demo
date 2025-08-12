@@ -616,5 +616,560 @@ ERROR:  invalid input syntax for integer: "abc"
 LINE 1: select ISNULL('abc', 123);
                       ^
 CONTEXT:  referenced column: isnull
+SELECT CONVERT(DATE, '');
+ shark_conv_helper_to_date 
+---------------------------
+ 01-01-1900
+(1 row)
+
+SELECT CONVERT(DATE, '', 130);
+ERROR:  function sys.shark_conv_hijri_to_greg(character varying, character varying, character varying) does not exist
+LINE 1: SELECT sys.shark_conv_hijri_to_greg(v_day, v_month, v_year)-...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  SELECT sys.shark_conv_hijri_to_greg(v_day, v_month, v_year)- 1
+CONTEXT:  PL/pgSQL function shark_conv_string_to_datetime2(text,text,numeric) line 485 at assignment
+PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE, '3-2-4');
+ERROR:  The style 0 is not supported for conversions from varchar to date.
+DETAIL:  Use of incorrect "style" parameter value during conversion process.
+HINT:  Change "style" parameter to the proper value and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE, '3-12-2024');
+ shark_conv_helper_to_date 
+---------------------------
+ 03-12-2024
+(1 row)
+
+SELECT CONVERT(DATE, '11-12-2024');
+ shark_conv_helper_to_date 
+---------------------------
+ 11-12-2024
+(1 row)
+
+SELECT CONVERT(DATE, '3.2.4');
+ERROR:  The style 0 is not supported for conversions from varchar to date.
+DETAIL:  Use of incorrect "style" parameter value during conversion process.
+HINT:  Change "style" parameter to the proper value and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE, '3.12.2024');
+ shark_conv_helper_to_date 
+---------------------------
+ 03-12-2024
+(1 row)
+
+SELECT CONVERT(DATE, '11.12.2024');
+ shark_conv_helper_to_date 
+---------------------------
+ 11-12-2024
+(1 row)
+
+SELECT CONVERT(DATE, '3/2/4');
+ERROR:  The style 0 is not supported for conversions from varchar to date.
+DETAIL:  Use of incorrect "style" parameter value during conversion process.
+HINT:  Change "style" parameter to the proper value and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE, '3/12/2024');
+ shark_conv_helper_to_date 
+---------------------------
+ 03-12-2024
+(1 row)
+
+SELECT CONVERT(DATE, '11/12/2024');
+ shark_conv_helper_to_date 
+---------------------------
+ 11-12-2024
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-30 23:59:59.9999999');
+ shark_conv_helper_to_date 
+---------------------------
+ 12-30-9999
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-30 23:59:59.99999999');
+ shark_conv_helper_to_date 
+---------------------------
+ 12-30-9999
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-30 23:59:59.999999999');
+ shark_conv_helper_to_date 
+---------------------------
+ 12-30-9999
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-30 23:59:59.9999999999');
+ERROR:  Conversion failed when converting date and/or time from character string.
+DETAIL:  Incorrect using of pair of input parameters values during conversion process.
+HINT:  Check the input parameters values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE, '9999-12-31 23:59:59.9999999');
+ shark_conv_helper_to_date 
+---------------------------
+ 12-31-9999
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-31 23:59:59.99999999');
+ shark_conv_helper_to_date 
+---------------------------
+ 12-31-9999
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-31 23:59:59.999999999');
+ shark_conv_helper_to_date 
+---------------------------
+ 12-31-9999
+(1 row)
+
+SELECT CONVERT(DATE, '9999-12-31 23:59:59.9999999999');
+ERROR:  Conversion failed when converting date and/or time from character string.
+DETAIL:  Incorrect using of pair of input parameters values during conversion process.
+HINT:  Check the input parameters values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE,'2023-00-01');
+ERROR:  The conversion of a varchar data type to a date data type resulted in an out-of-range value.
+DETAIL:  Use of incorrect pair of input parameter values during conversion process.
+HINT:  Check input parameter values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE,'0000-00-00');
+ERROR:  The conversion of a varchar data type to a date data type resulted in an out-of-range value.
+DETAIL:  Use of incorrect pair of input parameter values during conversion process.
+HINT:  Check input parameter values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(DATE,'1752-01-01');
+ shark_conv_helper_to_date 
+---------------------------
+ 01-01-1752
+(1 row)
+
+SELECT CONVERT(DATE,'1753-01-01');
+ shark_conv_helper_to_date 
+---------------------------
+ 01-01-1753
+(1 row)
+
+SELECT CONVERT(DATE, 'Apr 12,2000');
+ERROR:  invalid input syntax for integer: "apr"
+CONTEXT:  referenced column: array_position
+SQL statement "SELECT array_position(ARRAY(SELECT pg_catalog.lower(json_array_elements_text(p_lang_metadata_json -> 'months_shortnames'))), v_monthname)"
+PL/pgSQL function shark_get_monthnum_by_name(text,json) line 8 at assignment
+PL/pgSQL function shark_conv_string_to_datetime2(text,text,numeric) line 224 at assignment
+PL/pgSQL function shark_conv_helper_to_date(text,boolean,numeric) line 6 at RETURN
+referenced column: shark_conv_helper_to_date
+SELECT CONVERT(TIME, '11 AM');
+ shark_conv_helper_to_time 
+---------------------------
+ 11:00:00
+(1 row)
+
+SELECT CONVERT(TIME, '11 PM');
+ shark_conv_helper_to_time 
+---------------------------
+ 23:00:00
+(1 row)
+
+SELECT CONVERT(TIME, '0 AM');
+ shark_conv_helper_to_time 
+---------------------------
+ 00:00:00
+(1 row)
+
+SELECT CONVERT(TIME, '0 PM');
+ERROR:  The conversion of a varchar data type to a time data type resulted in an out-of-range value.
+DETAIL:  Use of incorrect pair of input parameter values during conversion process.
+HINT:  Check input parameter values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_time(integer,text,boolean,numeric) line 14 at RETURN
+referenced column: shark_conv_helper_to_time
+SELECT CONVERT(TIME, '11:22.123 AM');
+ERROR:  Conversion failed when converting date and/or time from character string.
+DETAIL:  Incorrect using of pair of input parameters values during conversion process.
+HINT:  Check the input parameters values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_time(integer,text,boolean,numeric) line 14 at RETURN
+referenced column: shark_conv_helper_to_time
+SELECT CONVERT(TIME, '11 AM -05:12');
+ shark_conv_helper_to_time 
+---------------------------
+ 11:00:00
+(1 row)
+
+SELECT CONVERT(TIME, '13 AM +05:12');
+ERROR:  The conversion of a varchar data type to a time data type resulted in an out-of-range value.
+DETAIL:  Use of incorrect pair of input parameter values during conversion process.
+HINT:  Check input parameter values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_time(integer,text,boolean,numeric) line 14 at RETURN
+referenced column: shark_conv_helper_to_time
+SELECT CONVERT(TIMESTAMP, '');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Mon Jan 01 00:00:00 1900
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '3-12-2024 14:30');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Tue Mar 12 14:30:00 2024
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '3.12.2024 14:30');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Tue Mar 12 14:30:00 2024
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '3/12/2024 14:30');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Tue Mar 12 14:30:00 2024
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '2022-10-30T03:00:00');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Sun Oct 30 03:00:00 2022
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '2022-10-30T03:00:00.123');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Sun Oct 30 03:00:00.123 2022
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '2022-10-30T03:00:00.123-12:12');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Sun Oct 30 03:00:00.123 2022
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '2022-10-30T03:00:00.123+12:12');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Sun Oct 30 03:00:00.123 2022
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '2022-10-30T03:00:00.12345');
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Sun Oct 30 03:00:00.12345 2022
+(1 row)
+
+SELECT CONVERT(TIMESTAMP, '2022-10-30T03:00:00:12345');
+ERROR:  Conversion failed when converting date and/or time from character string.
+DETAIL:  Incorrect using of pair of input parameters values during conversion process.
+HINT:  Check the input parameters values, correct them if needed, and try again.
+CONTEXT:  PL/pgSQL function shark_conv_helper_to_datetime2(integer,text,boolean,numeric) line 14 at RETURN
+referenced column: shark_conv_helper_to_datetime2
+SELECT CONVERT(TIMESTAMPTZ, '');
+ shark_conv_helper_to_datetimeoffset 
+-------------------------------------
+ Sun Dec 31 16:00:00 1899 PST
+(1 row)
+
+SELECT CONVERT(TIMESTAMPTZ, '', 130);
+ERROR:  function sys.shark_conv_hijri_to_greg(character varying, character varying, character varying) does not exist
+LINE 1: SELECT sys.shark_conv_hijri_to_greg(v_day, v_month, v_year)-...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  SELECT sys.shark_conv_hijri_to_greg(v_day, v_month, v_year)- 1
+CONTEXT:  PL/pgSQL function shark_conv_string_to_datetime2(text,text,numeric) line 485 at assignment
+PL/pgSQL function shark_conv_string_to_datetimeoffset(text,text,numeric) line 26 at assignment
+PL/pgSQL function shark_conv_helper_to_datetimeoffset(integer,text,boolean,numeric) line 14 at RETURN
+referenced column: shark_conv_helper_to_datetimeoffset
+SELECT CONVERT(TIMESTAMPTZ, '3-12-2024 14:30 +8:00');
+ shark_conv_helper_to_datetimeoffset 
+-------------------------------------
+ Mon Mar 11 23:30:00 2024 PDT
+(1 row)
+
+select CONVERT(varchar(30), CAST('2017-08-25' AS DATE), 102);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 2017.08.25
+(1 row)
+
+select CONVERT(varchar(30), CAST('13:01:59' AS TIME), 8);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 13:01:59
+(1 row)
+
+select CONVERT(varchar(30), CAST('13:01:59' AS TIME), 22);
+ shark_conv_helper_to_varchar 
+------------------------------
+  1:01:59 PM
+(1 row)
+
+select CONVERT(varchar(30), CAST('13:01:59' AS TIME), 22);
+ shark_conv_helper_to_varchar 
+------------------------------
+  1:01:59 PM
+(1 row)
+
+select CONVERT(varchar(30), CAST('2017-08-25 13:01:59' AS TIMESTAMP), 100);
+ shark_conv_helper_to_varchar 
+------------------------------
+ Aug 25 2017  1:01PM
+(1 row)
+
+select CONVERT(varchar(30), CAST('2017-08-25 13:01:59' AS TIMESTAMP), 109);
+ shark_conv_helper_to_varchar 
+------------------------------
+ Aug 25 2017  1:01:59:000PM
+(1 row)
+
+select CONVERT(DATE, '08/25/2017', 101);
+ shark_conv_helper_to_date 
+---------------------------
+ 08-25-2017
+(1 row)
+
+select CONVERT(TIME, '12:01:59', 101);
+ shark_conv_helper_to_time 
+---------------------------
+ 12:01:59
+(1 row)
+
+select CONVERT(TIMESTAMP, '2017-08-25 01:01:59PM', 120);
+ shark_conv_helper_to_datetime2 
+--------------------------------
+ Fri Aug 25 13:01:59 2017
+(1 row)
+
+select CONVERT(varchar, current_date, 8);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 
+(1 row)
+
+select CONVERT(varchar, current_date, 1);
+ shark_conv_helper_to_varchar 
+------------------------------
+--?.*
+(1 row)
+
+select CONVERT(varchar, localtime, 1);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 
+(1 row)
+
+select CONVERT(varchar, localtime, 8);
+ shark_conv_helper_to_varchar 
+------------------------------
+--?.*
+(1 row)
+
+select CONVERT(varchar(30), CAST(11234561231231.234 AS float), 1);
+  shark_conv_helper_to_varchar  
+--------------------------------
+ 1.1234561e+13                 
+(1 row)
+
+select CONVERT(varchar(30), CAST(11234561231231.234 AS float), 2);
+  shark_conv_helper_to_varchar  
+--------------------------------
+ 1.123456123123123e+13         
+(1 row)
+
+select CONVERT(varchar(30), CAST(11234561231231.234 AS float), 3);
+  shark_conv_helper_to_varchar  
+--------------------------------
+ 1.1234561231231234e+13        
+(1 row)
+
+select CONVERT(varchar(10), CAST(4936.56 AS MONEY), 0);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 4936.56
+(1 row)
+
+select CONVERT(varchar(10), CAST(4936.56 AS MONEY), 1);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 4,936.56
+(1 row)
+
+select CONVERT(varchar(10), CAST(4936.56 AS MONEY), 2);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 4936.5600
+(1 row)
+
+select CONVERT(varchar(10), CAST(-4936.56 AS MONEY), 0);
+ shark_conv_helper_to_varchar 
+------------------------------
+ -4936.56
+(1 row)
+
+SELECT CONVERT(int, 99.9);
+ int4 
+------
+  100
+(1 row)
+
+SELECT CONVERT(smallint, 99.9);
+ int2 
+------
+  100
+(1 row)
+
+SELECT CONVERT(bigint, 99.9);
+ int8 
+------
+  100
+(1 row)
+
+SELECT CONVERT(int, -99.9);
+ int4 
+------
+ -100
+(1 row)
+
+SELECT CONVERT(int, '99');
+ int4 
+------
+   99
+(1 row)
+
+SELECT CONVERT(int, CAST(99.9 AS double precision));
+ int4 
+------
+  100
+(1 row)
+
+SELECT CONVERT(int, CAST(99.9 AS real));
+ int4 
+------
+  100
+(1 row)
+
+select TRY_CONVERT(varchar(30), CAST('2017-08-25' AS DATE), 102);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 08-25-2017
+(1 row)
+
+select TRY_CONVERT(varchar(30), CAST('13:01:59' AS TIME), 8);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 13:01:59
+(1 row)
+
+select TRY_CONVERT(varchar(30), CAST('13:01:59' AS TIME), 22);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 13:01:59
+(1 row)
+
+select TRY_CONVERT(varchar(30), CAST('2017-08-25 13:01:59' AS TIMESTAMP), 109);
+ shark_conv_helper_to_varchar 
+------------------------------
+ Fri Aug 25 13:01:59 2017
+(1 row)
+
+select TRY_CONVERT(varchar(30), CAST('11234561231231.234' AS float), 0);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 11234561231231.2
+(1 row)
+
+select TRY_CONVERT(varchar(30), CAST('11234561231231.234'AS float), 1);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 11234561231231.2
+(1 row)
+
+select TRY_CONVERT(varchar(10), CAST(4936.56 AS MONEY), 0);
+ shark_conv_helper_to_varchar 
+------------------------------
+ 4936.56
+(1 row)
+
+select TRY_CAST('08/25/2017' AS date);
+ shark_try_cast_to_any 
+-----------------------
+ 08-25-2017
+(1 row)
+
+select TRY_CAST('12:01:59' AS time);
+ shark_try_cast_to_any 
+-----------------------
+ 12:01:59
+(1 row)
+
+select TRY_CAST(123 AS float);
+ shark_try_cast_to_any 
+-----------------------
+                   123
+(1 row)
+
+select TRY_CAST('123' AS int);
+ shark_try_cast_floor_int 
+--------------------------
+                      123
+(1 row)
+
+select TRY_CAST('123' AS text);
+ shark_try_cast_to_any 
+-----------------------
+ 123
+(1 row)
+
+select TRY_CAST('123.456' AS numeric(6,3));
+ shark_try_cast_to_any 
+-----------------------
+               123.456
+(1 row)
+
+select TRY_CAST(123.456 AS numeric(6,3));
+ shark_try_cast_to_any 
+-----------------------
+               123.456
+(1 row)
+
+select TRY_CAST('123' As smallint);
+ shark_try_cast_floor_smallint 
+-------------------------------
+                           123
+(1 row)
+
+select TRY_CAST('1234567890' AS bigint);
+ shark_try_cast_floor_bigint 
+-----------------------------
+                  1234567890
+(1 row)
+
+select TRY_CAST(CAST(12.56 as numeric(4,2)) As smallint);
+ shark_try_cast_floor_smallint 
+-------------------------------
+                              
+(1 row)
+
+select TRY_CAST(CAST(1.56 as real) As smallint);
+ shark_try_cast_floor_smallint 
+-------------------------------
+                              
+(1 row)
+
+select TRY_CAST(CAST(1.56 as money) As smallint);
+ shark_try_cast_floor_smallint 
+-------------------------------
+                              
+(1 row)
+
+select TRY_CAST(4936.56 AS MONEY);
+ shark_try_cast_to_any 
+-----------------------
+             $4,936.56
+(1 row)
+
 reset search_path;
 drop schema functions_test2 cascade;
