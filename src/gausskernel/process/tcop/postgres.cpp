@@ -12806,6 +12806,14 @@ void exec_get_bind_message(StringInfo input_message, BindMessage *pqBindMessage,
 
     if (DB_IS_CMPT(A_FORMAT)) {
         get_prepared_statement(stmtName, pstmt, psrc);
+        if (numParams != (*psrc)->num_params) {
+            ereport(ERROR,
+                (errcode(ERRCODE_PROTOCOL_VIOLATION),
+                    errmsg("bind message supplies %d parameters, but prepared statement \"%s\" requires %d",
+                        numParams,
+                        stmtName,
+                        (*psrc)->num_params)));
+        }
     }
 
     if (numParams > 0) {
