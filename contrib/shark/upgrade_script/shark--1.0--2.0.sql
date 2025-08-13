@@ -6696,3 +6696,49 @@ RETURNS integer
 language c
 immutable strict NOT FENCED NOT SHIPPABLE
 AS '$libdir/shark', $function$dateparttimetz$function$;
+
+CREATE OR REPLACE FUNCTION sys.getdate() RETURNS timestamp
+AS '$libdir/shark', 'getdate_internal'
+LANGUAGE C STABLE NOT FENCED NOT SHIPPABLE;
+
+CREATE OR REPLACE FUNCTION sys.datename(cstring,date)
+RETURNS varchar
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$datenamedate$function$;
+
+CREATE OR REPLACE FUNCTION sys.datename(cstring,timestamp without time zone)
+RETURNS varchar
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$datenametimestamp$function$;
+
+CREATE OR REPLACE FUNCTION sys.datename(cstring,timestamp with time zone)
+RETURNS varchar
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$datenametimestamptz$function$;
+
+CREATE OR REPLACE FUNCTION sys.datename(cstring,time without time zone)
+RETURNS varchar
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$datenametime$function$;
+
+CREATE OR REPLACE FUNCTION sys.datename(cstring,time with time zone)
+RETURNS varchar
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$datenametimetz$function$;
+
+CREATE OR REPLACE FUNCTION sys.len(expr TEXT)
+RETURNS INTEGER as $$
+SELECT length(trim(trailing from expr));
+$$
+language sql immutable strict NOT FENCED NOT SHIPPABLE;
+
+CREATE OR REPLACE FUNCTION sys.len(expr sys.VARBINARY)
+RETURNS INTEGER
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$varbinary_length$function$;

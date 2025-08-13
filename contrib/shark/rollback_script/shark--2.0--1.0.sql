@@ -302,4 +302,11 @@ drop function if exists sys.datepart(cstring,timestamp without time zone);
 drop function if exists sys.datepart(cstring,timestamp with time zone);
 drop function if exists sys.datepart(cstring,time without time zone);
 drop function if exists sys.datepart(cstring,time with time zone);
-
+drop function if exists sys.getdate();
+drop function if exists sys.datename(cstring,date);
+drop function if exists sys.datename(cstring,timestamp without time zone);
+drop function if exists sys.datename(cstring,timestamp with time zone);
+drop function if exists sys.datename(cstring,time without time zone);
+drop function if exists sys.datename(cstring,time with time zone);
+drop function if exists sys.len(TEXT);
+drop function if exists sys.len(sys.VARBINARY);

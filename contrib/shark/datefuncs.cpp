@@ -57,6 +57,12 @@ extern "C" Datum dateparttimestamptz(PG_FUNCTION_ARGS);
 extern "C" Datum datepartdate(PG_FUNCTION_ARGS);
 extern "C" Datum dateparttime(PG_FUNCTION_ARGS);
 extern "C" Datum dateparttimetz(PG_FUNCTION_ARGS);
+extern "C" Datum getdate_internal(PG_FUNCTION_ARGS);
+extern "C" Datum datenametimestamp(PG_FUNCTION_ARGS);
+extern "C" Datum datenametimestamptz(PG_FUNCTION_ARGS);
+extern "C" Datum datenamedate(PG_FUNCTION_ARGS);
+extern "C" Datum datenametime(PG_FUNCTION_ARGS);
+extern "C" Datum datenametimetz(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(dateaddtimestamp);
 PG_FUNCTION_INFO_V1(dateaddtimestamptz);
@@ -68,6 +74,12 @@ PG_FUNCTION_INFO_V1(dateparttimestamptz);
 PG_FUNCTION_INFO_V1(datepartdate);
 PG_FUNCTION_INFO_V1(dateparttime);
 PG_FUNCTION_INFO_V1(dateparttimetz);
+PG_FUNCTION_INFO_V1(getdate_internal);
+PG_FUNCTION_INFO_V1(datenametimestamp);
+PG_FUNCTION_INFO_V1(datenametimestamptz);
+PG_FUNCTION_INFO_V1(datenamedate);
+PG_FUNCTION_INFO_V1(datenametime);
+PG_FUNCTION_INFO_V1(datenametimetz);
 
 typedef struct DataInfo {
     unsigned long year = 0;
@@ -778,4 +790,280 @@ Datum dateparttimetz(PG_FUNCTION_ARGS)
     }
     get_date_part_by_string(args, tm, tz, fsec, res, true);
     PG_RETURN_INT32(res);
+}
+
+char* get_date_name_by_string(char* args, pg_tm* tm, int tz, fsec_t fsec, bool isTz)
+{
+    errno_t ret = 0;
+    const int charLen = 16;
+    char* result = (char*)palloc(charLen);
+    int val = 0;
+    bool isNull = true;
+    char* arg = pg_strtolower(args);
+
+    if (IsYearFormatStr(arg)) {
+        if (tm->tm_year > 0) {
+            val = tm->tm_year;
+        } else {
+            val = tm->tm_year - 1;
+        }
+    } else if (IsQuarterFormatStr(arg)) {
+        val = (tm->tm_mon - 1)/3 + 1;
+    } else if (IsMonthFormatStr(arg)) {
+        isNull = false;
+        val = tm->tm_mon;
+        switch (val) {
+            case 1:
+                ret = sprintf_s(result, charLen, "%s", "January");
+                break;
+            case 2:
+                ret = sprintf_s(result, charLen, "%s", "February");
+                break;
+            case 3:
+                ret = sprintf_s(result, charLen, "%s", "March");
+                break;
+            case 4:
+                ret = sprintf_s(result, charLen, "%s", "April");
+                break;
+            case 5:
+                ret = sprintf_s(result, charLen, "%s", "May");
+                break;
+            case 6:
+                ret = sprintf_s(result, charLen, "%s", "June");
+                break;
+            case 7:
+                ret = sprintf_s(result, charLen, "%s", "July");
+                break;
+            case 8:
+                ret = sprintf_s(result, charLen, "%s", "August");
+                break;
+            case 9:
+                ret = sprintf_s(result, charLen, "%s", "September");
+                break;
+            case 10:
+                ret = sprintf_s(result, charLen, "%s", "October");
+                break;
+            case 11:
+                ret = sprintf_s(result, charLen, "%s", "November");
+                break;
+            case 12:
+                ret = sprintf_s(result, charLen, "%s", "December");
+                break;
+            default:
+                ret = sprintf_s(result, charLen, "%s", "Error");
+                break;
+        }
+        securec_check_ss(ret, "", "");
+    } else if (IsDayofyearFormatStr(arg)) {
+        val = (date2j(tm->tm_year, tm->tm_mon, tm->tm_mday) - date2j(tm->tm_year, 1, 1) + 1);
+    } else if (IsDayFormatStr(arg)) {
+        val = tm->tm_mday;
+    } else if (IsWeekdayFormatStr(arg)) {
+        val = j2day(date2j(tm->tm_year, tm->tm_mon, tm->tm_mday)) + 1;
+        isNull = false;
+        switch (val) {
+            case 1:
+                ret = sprintf_s(result, charLen, "%s", "Sunday");
+                break;
+            case 2:
+                ret = sprintf_s(result, charLen, "%s", "Monday");
+                break;
+            case 3:
+                ret = sprintf_s(result, charLen, "%s", "Tuesday");
+                break;
+            case 4:
+                ret = sprintf_s(result, charLen, "%s", "Wednesday");
+                break;
+            case 5:
+                ret = sprintf_s(result, charLen, "%s", "Thursday");
+                break;
+            case 6:
+                ret = sprintf_s(result, charLen, "%s", "Friday");
+                break;
+            case 7:
+                ret = sprintf_s(result, charLen, "%s", "Saturday");
+                break;
+            default:
+                ret = sprintf_s(result, charLen, "%s", "Error");
+                break;
+        }
+        securec_check_ss(ret, "", "");
+    } else if (IsWeekFormatStr(arg)) {
+        int wd = 0;
+        int yd = 0;
+        wd = j2day(date2j(tm->tm_year, tm->tm_mon, tm->tm_mday));
+        yd = (date2j(tm->tm_year, tm->tm_mon, tm->tm_mday) - date2j(tm->tm_year, 1, 1) + 1) - 1;
+        int base = j2day(date2j(tm->tm_year, 1, 1));
+        val = (base + yd) / 7 + 1;
+    } else if (IsHourFormatStr(arg)) {
+        val = tm->tm_hour;
+    } else if (IsMinuteFormatStr(arg)) {
+        val = tm->tm_min;
+    }  else if (IsSecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        val = tm->tm_sec + fsec / 1000000.0;
+#else
+        val = tm->tm_sec + fsec;
+#endif
+    } else if (IsMillisecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        val = fsec / 1000.0;
+#else
+        val = fsec * 1000;
+#endif
+    } else if (IsMicrosecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        val = fsec;
+#else
+        val = fsec * MAX_MICRO_SECOND;
+#endif
+    } else if (IsNanosecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        val = fsec * 1000;
+#else
+        val = fsec * MAX_NANO_SECOND;
+#endif
+    } else if (IsTzoffsetFormatStr(arg)) {
+        val = 0;
+        isNull = false;
+        if (isTz) {
+            int tzVal;
+            if (tz < 0) {
+                tzVal = -(tz/MINS_PER_HOUR);
+                ret = sprintf_s(result, charLen, "+%02d:%02d", tzVal/MINS_PER_HOUR, tzVal%MINS_PER_HOUR);
+            } else {
+                tzVal = tz/MINS_PER_HOUR;
+                ret = sprintf_s(result, charLen, "-%02d:%02d", tzVal/MINS_PER_HOUR, tzVal%MINS_PER_HOUR);
+            }
+        } else {
+            ret = sprintf_s(result, charLen, "%s", "+00;00");
+        }
+        securec_check_ss(ret, "", "");
+    } else if (IsIsoweekFormatStr(arg)) {
+        val = (float8)date2isoweek(tm->tm_year, tm->tm_mon, tm->tm_mday);
+    } else {
+        pfree(result);
+        ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+            errmsg("unrecognized role option \"%s\"", arg)));
+    }
+
+    if (isNull) {
+        ret = sprintf_s(result, charLen, "%d", val);
+        securec_check_ss(ret, "", "");
+    }
+    return result;
+}
+
+Datum datenametimestamp(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal = PG_GETARG_TIMESTAMP(1);
+    VarChar* result = NULL;
+    char* args = PG_GETARG_CSTRING(0);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec = 0;
+  
+    if (timestamp2tm(timestampVal, NULL, tm, &fsec, NULL, NULL) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    char* res = get_date_name_by_string(args, tm, 0, fsec, false);
+    if (res != NULL) {
+        result = cstring_to_text(res);
+    }
+    PG_RETURN_VARCHAR_P(result);
+}
+
+Datum datenametimestamptz(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestampVal = PG_GETARG_TIMESTAMPTZ(1);
+    VarChar* result = NULL;
+    char* args = PG_GETARG_CSTRING(0);
+    struct pg_tm tm = {0};
+    fsec_t fsec = 0;
+    int tz = 0;
+  
+    if (timestamp2tm(timestampVal, &tz, &tm, &fsec, NULL, NULL) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    char* res = get_date_name_by_string(args, &tm, tz, fsec, true);
+    if (res != NULL) {
+        result = cstring_to_text(res);
+    }
+    PG_RETURN_VARCHAR_P(result);
+}
+
+Datum datenamedate(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal;
+    VarChar* result = NULL;
+    DateADT dateVal = PG_GETARG_DATEADT(1);
+    timestampVal = date2timestamp(dateVal);
+    char* args = PG_GETARG_CSTRING(0);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec = 0;
+ 
+    timestamp2tm(timestampVal, NULL, tm, &fsec, NULL, NULL);
+    if (!IS_VALID_JULIAN(tm->tm_year, tm->tm_mon, tm->tm_mday)) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    char* res = get_date_name_by_string(args, tm, 0, fsec, false);
+    if (res != NULL) {
+        result = cstring_to_text(res);
+    }
+    PG_RETURN_VARCHAR_P(result);
+}
+
+Datum datenametime(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal;
+    VarChar* result = NULL;
+    TimeADT time = PG_GETARG_TIMEADT(1);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec;
+    time2tm(time, tm, &fsec);
+    tm->tm_mday = 1;
+    tm->tm_mon = 1;
+    tm->tm_year = 1900;
+    char* args = PG_GETARG_CSTRING(0);
+
+    if (tm2timestamp(tm, fsec, NULL, &timestampVal) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    char *res = get_date_name_by_string(args, tm, 0, fsec, false);
+    if (res != NULL) {
+        result = cstring_to_text(res);
+    }
+    PG_RETURN_VARCHAR_P(result);
+}
+
+Datum datenametimetz(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestampVal;
+    VarChar* result = NULL;
+    TimeTzADT* time = PG_GETARG_TIMETZADT_P(1);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec;
+    int tz = 0;
+    timetz2tm(time, tm, &fsec, &tz);
+    tm->tm_mday = 1;
+    tm->tm_mon = 1;
+    tm->tm_year = 1900;
+    char* args = PG_GETARG_CSTRING(0);
+
+    if (tm2timestamp(tm, fsec, &tz, &timestampVal) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    char *res = get_date_name_by_string(args, tm, tz, fsec, false);
+    if (res != NULL) {
+        result = cstring_to_text(res);
+    }
+    PG_RETURN_VARCHAR_P(result);
 }
