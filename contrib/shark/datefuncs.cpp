@@ -52,12 +52,22 @@ extern "C" Datum dateaddtimestamptz(PG_FUNCTION_ARGS);
 extern "C" Datum dateadddate(PG_FUNCTION_ARGS);
 extern "C" Datum dateaddtime(PG_FUNCTION_ARGS);
 extern "C" Datum dateaddtimetz(PG_FUNCTION_ARGS);
+extern "C" Datum dateparttimestamp(PG_FUNCTION_ARGS);
+extern "C" Datum dateparttimestamptz(PG_FUNCTION_ARGS);
+extern "C" Datum datepartdate(PG_FUNCTION_ARGS);
+extern "C" Datum dateparttime(PG_FUNCTION_ARGS);
+extern "C" Datum dateparttimetz(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(dateaddtimestamp);
 PG_FUNCTION_INFO_V1(dateaddtimestamptz);
 PG_FUNCTION_INFO_V1(dateadddate);
 PG_FUNCTION_INFO_V1(dateaddtime);
 PG_FUNCTION_INFO_V1(dateaddtimetz);
+PG_FUNCTION_INFO_V1(dateparttimestamp);
+PG_FUNCTION_INFO_V1(dateparttimestamptz);
+PG_FUNCTION_INFO_V1(datepartdate);
+PG_FUNCTION_INFO_V1(dateparttime);
+PG_FUNCTION_INFO_V1(dateparttimetz);
 
 typedef struct DataInfo {
     unsigned long year = 0;
@@ -491,4 +501,281 @@ Datum dateaddtimetz(PG_FUNCTION_ARGS)
             errmsg("timestamp out of range")));
     }
     PG_RETURN_TIMESTAMPTZ(timestampVal);
+}
+
+static inline bool IsYearFormatStr(const char *arg)
+{
+    return (strcmp(arg, "yy") == 0 || strcmp(arg, "yyyy") == 0 || strcmp(arg, "year") == 0);
+}
+
+static inline bool IsQuarterFormatStr(const char *arg)
+{
+    return (strcmp(arg, "qq") == 0 || strcmp(arg, "q") == 0 || strcmp(arg, "quarter") == 0);
+}
+
+static inline bool IsMonthFormatStr(const char *arg)
+{
+    return (strcmp(arg, "mm") == 0 || strcmp(arg, "m") == 0 || strcmp(arg, "month") == 0);
+}
+
+static inline bool IsDayofyearFormatStr(const char *arg)
+{
+    return (strcmp(arg, "dy") == 0 || strcmp(arg, "y") == 0 || strcmp(arg, "dayofyear") == 0);
+}
+
+static inline bool IsDayFormatStr(const char *arg)
+{
+    return (strcmp(arg, "dd") == 0 || strcmp(arg, "d") == 0 || strcmp(arg, "day") == 0);
+}
+
+static inline bool IsWeekdayFormatStr(const char *arg)
+{
+    return (strcmp(arg, "dw") == 0 || strcmp(arg, "w") == 0 || strcmp(arg, "weekday") == 0);
+}
+
+static inline bool IsWeekFormatStr(const char *arg)
+{
+    return (strcmp(arg, "wk") == 0 || strcmp(arg, "ww") == 0 || strcmp(arg, "week") == 0);
+}
+
+static inline bool IsHourFormatStr(const char *arg)
+{
+    return (strcmp(arg, "hh") == 0 || strcmp(arg, "hour") == 0);
+}
+
+static inline bool IsMinuteFormatStr(const char *arg)
+{
+    return (strcmp(arg, "mi") == 0 || strcmp(arg, "n") == 0 || strcmp(arg, "minute") == 0);
+}
+
+static inline bool IsSecondFormatStr(const char *arg)
+{
+    return (strcmp(arg, "ss") == 0 || strcmp(arg, "s") == 0 || strcmp(arg, "second") == 0);
+}
+
+static inline bool IsMillisecondFormatStr(const char *arg)
+{
+    return (strcmp(arg, "ms") == 0 || strcmp(arg, "millisecond") == 0);
+}
+
+static inline bool IsMicrosecondFormatStr(const char *arg)
+{
+    return (strcmp(arg, "mcs") == 0 || strcmp(arg, "microsecond") == 0);
+}
+
+static inline bool IsNanosecondFormatStr(const char *arg)
+{
+    return (strcmp(arg, "ns") == 0 || strcmp(arg, "nanosecond") == 0);
+}
+
+static inline bool IsTzoffsetFormatStr(const char *arg)
+{
+    return (strcmp(arg, "tz") == 0 || strcmp(arg, "tzoffset") == 0);
+}
+
+static inline bool IsIsoweekFormatStr(const char *arg)
+{
+    return (strcmp(arg, "isowk") == 0 || strcmp(arg, "isoww") == 0 || strcmp(arg, "iso_week") == 0);
+}
+void get_date_part_by_string(char* args, pg_tm *tm, int tz, fsec_t fsec, int &result, bool isTz)
+{
+    char* arg = pg_strtolower(args);
+    if (IsYearFormatStr(arg)) {
+        if (tm->tm_year > 0) {
+            result = tm->tm_year;
+        } else {
+            result = tm->tm_year - 1;
+        }
+    } else if (IsQuarterFormatStr(arg)) {
+        result = (tm->tm_mon - 1) / 3 + 1;
+    } else if (IsMonthFormatStr(arg)) {
+        result = tm->tm_mon;
+    } else if (IsDayofyearFormatStr(arg)) {
+        result = (date2j(tm->tm_year, tm->tm_mon, tm->tm_mday) - date2j(tm->tm_year, 1, 1) + 1);
+    } else if (IsDayFormatStr(arg)) {
+        result = tm->tm_mday;
+    } else if (IsWeekdayFormatStr(arg)) {
+        result = j2day(date2j(tm->tm_year, tm->tm_mon, tm->tm_mday)) + 1;
+    } else if (IsWeekFormatStr(arg)) {
+        int wd = 0;
+        int yd = 0;
+        wd = j2day(date2j(tm->tm_year, tm->tm_mon, tm->tm_mday));
+        yd = (date2j(tm->tm_year, tm->tm_mon, tm->tm_mday) - date2j(tm->tm_year, 1, 1) + 1) - 1;
+        int base = j2day(date2j(tm->tm_year, 1, 1));
+        result = (base + yd) / 7 + 1;
+    } else if (IsHourFormatStr(arg)) {
+        result = tm->tm_hour;
+    } else if (IsMinuteFormatStr(arg)) {
+        result = tm->tm_min;
+    } else if (IsSecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        result = tm->tm_sec + fsec / 1000000.0;
+#else
+        result = tm->tm_sec + fsec;
+#endif
+    } else if (IsMillisecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        result = fsec / 1000.0;
+#else
+        result = fsec * 1000;
+#endif
+    } else if (IsMicrosecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        result = fsec;
+#else
+        result = fsec * MAX_MICRO_SECOND;
+#endif
+    } else if (IsNanosecondFormatStr(arg)) {
+#ifdef HAVE_INT64_TIMESTAMP
+        result = fsec * 1000;
+#else
+        result = fsec * MAX_NANO_SECOND;
+#endif
+    } else if (IsTzoffsetFormatStr(arg)) {
+        if (!isTz) {
+            result = 0;
+        } else {
+            result = -tz;
+            result /= MINS_PER_HOUR;
+        }
+    } else if (IsIsoweekFormatStr(arg)) {
+        result = (float8)date2isoweek(tm->tm_year, tm->tm_mon, tm->tm_mday);
+    } else {
+        ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+            errmsg("unrecognized role option \"%s\"", arg)));
+    }
+}
+
+Datum getdate_internal(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestamptz = GetCurrentStmtsysTimestamp();
+    Timestamp result;
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec = 0;
+    int tz = 0;
+
+    if (timestamp2tm(timestamptz, &tz, tm, &fsec, NULL, NULL) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+#ifdef HAVE_INT64_TIMESTAMP
+    fsec = fsec / 1000.0;
+    int val = fsec % 10;
+    if (val == 9) {
+        fsec = fsec + 1;
+    } else if (val == 5 || val == 6 || val == 7 || val == 8) {
+        fsec = (fsec / 10) * 10 + 7;
+    } else if (val == 2 || val == 3 || val == 4) {
+        fsec = (fsec / 10) * 10 + 3;
+    } else {
+        fsec = (fsec / 10) * 10;
+    }
+    fsec = fsec * 1000;
+#endif
+
+    if (tm2timestamp(tm, fsec, NULL, &result) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    PG_RETURN_TIMESTAMP(result);
+}
+
+Datum dateparttimestamp(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal = PG_GETARG_TIMESTAMP(1);
+    char* args = PG_GETARG_CSTRING(0);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec = 0;
+    int res = 0;
+
+    if (timestamp2tm(timestampVal, NULL, tm, &fsec, NULL, NULL) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    get_date_part_by_string(args, tm, 0, fsec, res, false);
+    PG_RETURN_INT32(res);
+}
+
+Datum dateparttimestamptz(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestampVal = PG_GETARG_TIMESTAMPTZ(1);
+    char* args = PG_GETARG_CSTRING(0);
+    struct pg_tm tm = {0};
+    fsec_t fsec = 0;
+    int tz = 0;
+    int res = 0;
+
+    if (timestamp2tm(timestampVal, &tz, &tm, &fsec, NULL, NULL) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    get_date_part_by_string(args, &tm, tz, fsec, res, true);
+    PG_RETURN_INT32(res);
+}
+
+Datum datepartdate(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal;
+    DateADT dateVal = PG_GETARG_DATEADT(1);
+    timestampVal = date2timestamp(dateVal);
+    char* args = PG_GETARG_CSTRING(0);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec = 0;
+    int res = 0;
+
+    timestamp2tm(timestampVal, NULL, tm, &fsec, NULL, NULL);
+    if (!IS_VALID_JULIAN(tm->tm_year, tm->tm_mon, tm->tm_mday)) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("date out of range")));
+    }
+    get_date_part_by_string(args, tm, 0, fsec, res, false);
+    PG_RETURN_INT32(res);
+}
+
+Datum dateparttime(PG_FUNCTION_ARGS)
+{
+    Timestamp timestampVal;
+    TimeADT time = PG_GETARG_TIMEADT(1);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec;
+    time2tm(time, tm, &fsec);
+    tm->tm_mday = 1;
+    tm->tm_mon = 1;
+    tm->tm_year = 1900;
+    char* args = PG_GETARG_CSTRING(0);
+    int res = 0;
+ 
+    if (tm2timestamp(tm, fsec, NULL, &timestampVal) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    get_date_part_by_string(args, tm, 0, fsec, res, false);
+    PG_RETURN_INT32(res);
+}
+
+Datum dateparttimetz(PG_FUNCTION_ARGS)
+{
+    TimestampTz timestampVal;
+    TimeTzADT* time = PG_GETARG_TIMETZADT_P(1);
+    struct pg_tm tt;
+    struct pg_tm *tm = &tt;
+    fsec_t fsec;
+    int tz = 0;
+    timetz2tm(time, tm, &fsec, &tz);
+    tm->tm_mday = 1;
+    tm->tm_mon = 1;
+    tm->tm_year = 1900;
+    char* args = PG_GETARG_CSTRING(0);
+    int res = 0;
+
+    if (tm2timestamp(tm, fsec, &tz, &timestampVal) != 0) {
+        ereport(ERROR, (errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+            errmsg("timestamp out of range")));
+    }
+    get_date_part_by_string(args, tm, tz, fsec, res, true);
+    PG_RETURN_INT32(res);
 }

@@ -6666,3 +6666,33 @@ RETURNS timestamp with time zone
 language c
 immutable strict NOT FENCED NOT SHIPPABLE
 AS '$libdir/shark', $function$dateaddtimetz$function$;
+
+CREATE OR REPLACE FUNCTION sys.datepart(cstring,date)
+RETURNS integer
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$datepartdate$function$;
+
+CREATE OR REPLACE FUNCTION sys.datepart(cstring,timestamp without time zone)
+RETURNS integer
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateparttimestamp$function$;
+
+CREATE OR REPLACE FUNCTION sys.datepart(cstring,timestamp with time zone)
+RETURNS integer
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateparttimestamptz$function$;
+
+CREATE OR REPLACE FUNCTION sys.datepart(cstring,time without time zone)
+RETURNS integer
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateparttime$function$;
+
+CREATE OR REPLACE FUNCTION sys.datepart(cstring,time with time zone)
+RETURNS integer
+language c
+immutable strict NOT FENCED NOT SHIPPABLE
+AS '$libdir/shark', $function$dateparttimetz$function$;

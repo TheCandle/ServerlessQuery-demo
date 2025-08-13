@@ -1829,3 +1829,127 @@ select dateadd(dd,id1,id)from t;
 (1 row)
 
 drop table t;
+--test datepart
+SELECT DATEPART(year,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+     2007
+(1 row)
+
+SELECT DATEPART(quarter,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+        4
+(1 row)
+
+SELECT DATEPART(month,timestamptz'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       10
+(1 row)
+
+SELECT DATEPART(dayofyear,timestamptz'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+      303
+(1 row)
+
+SELECT DATEPART(day,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       30
+(1 row)
+
+SELECT DATEPART(week,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       44
+(1 row)
+
+SELECT DATEPART(weekday,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+        3
+(1 row)
+
+SELECT DATEPART(hour,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       12
+(1 row)
+
+SELECT DATEPART(minute,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       15
+(1 row)
+
+SELECT DATEPART(second,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       32
+(1 row)
+
+SELECT DATEPART(millisecond,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+      123
+(1 row)
+
+SELECT DATEPART(microsecond,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+   123457
+(1 row)
+
+SELECT DATEPART(nanosecond,timestamp'2007-10-30 12:15:32.1234567');
+ datepart  
+-----------
+ 123457000
+(1 row)
+
+SELECT DATEPART(iso_week,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       44
+(1 row)
+
+SELECT DATEPART(ISOWW,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       44
+(1 row)
+
+SELECT DATEPART(ISOWK,timestamp'2007-10-30 12:15:32.1234567');
+ datepart 
+----------
+       44
+(1 row)
+
+SELECT DATEPART(year,date'2007-10-30');
+ datepart 
+----------
+     2007
+(1 row)
+
+SELECT DATEPART(year,time'23:20:20');
+ datepart 
+----------
+     1900
+(1 row)
+
+SELECT DATEPART(year,timetz'23:20:20');
+ datepart 
+----------
+     1900
+(1 row)
+
+select datepart('','2023/3/31');
+ERROR:  unrecognized role option ""
+CONTEXT:  referenced column: datepart
+select datepart(2022,'2023/3/31 11:25:35.123456789');
+ERROR:  function datepart(integer, unknown) does not exist
+LINE 1: select datepart(2022,'2023/3/31 11:25:35.123456789');
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  referenced column: datepart

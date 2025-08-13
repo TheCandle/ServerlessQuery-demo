@@ -683,3 +683,26 @@ select dateadd(dd,id1+id1+(id2 -id2),id)from t;
 select dateadd(dd,(id1+id1+(id2 -id2)),id)from t;
 select dateadd(dd,id1,id)from t;
 drop table t;
+
+--test datepart
+SELECT DATEPART(year,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(quarter,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(month,timestamptz'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(dayofyear,timestamptz'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(day,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(week,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(weekday,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(hour,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(minute,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(second,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(millisecond,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(microsecond,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(nanosecond,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(iso_week,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(ISOWW,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(ISOWK,timestamp'2007-10-30 12:15:32.1234567');
+SELECT DATEPART(year,date'2007-10-30');
+SELECT DATEPART(year,time'23:20:20');
+SELECT DATEPART(year,timetz'23:20:20');
+select datepart('','2023/3/31');
+select datepart(2022,'2023/3/31 11:25:35.123456789');

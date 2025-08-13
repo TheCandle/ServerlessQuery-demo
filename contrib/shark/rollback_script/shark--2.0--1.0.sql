@@ -297,3 +297,9 @@ drop function if exists sys.dateadd(cstring,integer,timestamp without time zone)
 drop function if exists sys.dateadd(cstring,integer,timestamp with time zone);
 drop function if exists sys.dateadd(cstring,integer,time without time zone);
 drop function if exists sys.dateadd(cstring,integer,time with time zone);
+drop function if exists sys.datepart(cstring,date);
+drop function if exists sys.datepart(cstring,timestamp without time zone);
+drop function if exists sys.datepart(cstring,timestamp with time zone);
+drop function if exists sys.datepart(cstring,time without time zone);
+drop function if exists sys.datepart(cstring,time with time zone);
+
