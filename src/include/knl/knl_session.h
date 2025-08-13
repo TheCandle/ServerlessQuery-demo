@@ -2494,6 +2494,8 @@ typedef struct knl_u_cache_context {
 
     List* cached_membership_roles;
 
+    Oid cachedSequenceOid;
+
     struct _SPI_plan* plan_getrulebyoid;
 
     struct _SPI_plan* plan_getviewrule;
@@ -2520,6 +2522,8 @@ typedef struct knl_u_cache_context {
     bool PartRelCacheNeedEOXActWork;
 
     bool bucket_cache_need_eoxact_work; 
+
+    bool cachedSequenceOidIsAutoInc;
 
 } knl_u_cache_context;
 
