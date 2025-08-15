@@ -397,11 +397,11 @@ static int32 anychar_typmodin(ArrayType *ta, const char *typname)
                 (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("length for type %s must be at least 1", typname)));
     }
-    if (*tl > MaxAttrSize) {
+    if (*tl > MAX_BINARY_SIZE) {
         ereport(ERROR,
                 (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("length for type %s cannot exceed %d",
-                        typname, MaxAttrSize)));
+                        typname, MAX_BINARY_SIZE < MaxAttrSize ? MAX_BINARY_SIZE : MaxAttrSize)));
     }
 
     /*

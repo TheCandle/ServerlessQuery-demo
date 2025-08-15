@@ -16,6 +16,11 @@ CREATE TABLE t6 (id int, a VARBINARY(0));
 ERROR:  length for type varbinary must be at least 1
 LINE 1: CREATE TABLE t6 (id int, a VARBINARY(0));
                                    ^
+CREATE TABLE t7 (id int, a VARBINARY(8001));
+ERROR:  length for type varbinary cannot exceed 8000
+LINE 1: CREATE TABLE t7 (id int, a VARBINARY(8001));
+                                   ^
+CREATE TABLE t8 (id int, a VARBINARY(8000));
 CREATE INDEX idx1 ON t1(a);
 CREATE INDEX idx2 ON t2(a);
 CREATE INDEX idx3 ON t3(a);
