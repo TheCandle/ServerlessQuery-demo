@@ -1044,7 +1044,8 @@ void SetShmemCxt(void)
                                        AUXILIARY_BACKENDS +
                                        AV_LAUNCHER_PROCS +
                                        g_max_worker_processes +
-                                       thread_pool_stream_proc_num;
+                                       thread_pool_stream_proc_num +
+                                       (ENABLE_DMS ? NUM_DMS_CALLBACK_PROCS : 0);
 
 #ifndef ENABLE_LITE_MODE
     g_instance.shmem_cxt.MaxReserveBackendId = g_instance.attr.attr_sql.job_queue_processes +
@@ -1053,7 +1054,8 @@ void SetShmemCxt(void)
                                                (thread_pool_worker_num * STREAM_RESERVE_PROC_TIMES) +
                                                AUXILIARY_BACKENDS +
                                                AV_LAUNCHER_PROCS +
-                                               g_max_worker_processes;
+                                               g_max_worker_processes +
+                                               (ENABLE_DMS ? NUM_DMS_CALLBACK_PROCS : 0);
 #else
     g_instance.shmem_cxt.MaxReserveBackendId = g_instance.attr.attr_sql.job_queue_processes +
                                                g_instance.attr.attr_storage.autovacuum_max_workers +
@@ -1061,7 +1063,8 @@ void SetShmemCxt(void)
                                                thread_pool_worker_num +
                                                AUXILIARY_BACKENDS +
                                                AV_LAUNCHER_PROCS +
-                                               g_max_worker_processes;
+                                               g_max_worker_processes +
+                                               (ENABLE_DMS ? NUM_DMS_CALLBACK_PROCS : 0);
 #endif
     Assert(g_instance.shmem_cxt.MaxBackends <= MAX_BACKENDS);
 }
