@@ -2513,6 +2513,7 @@ void ComputeIndexAttrs(IndexInfo* indexInfo, Oid* typeOidP, Oid* collationOidP, 
 
         attn++;
     }
+    indexInfo->ii_ExpressionUsers = get_user_from_index_expressions(indexInfo->ii_Expressions);
 }
 
 /*
