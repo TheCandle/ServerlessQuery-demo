@@ -2329,9 +2329,9 @@ static void ProcessCopyNotAllowedOptions(CopyState cstate)
  */
 static bool CheckCopyErrorTableDef(Relation rel)
 {
-    int natts = RelationGetNumberOfAttributes(rel);
+    int nattrs = RelationGetNumberOfAttributes(rel);
     TupleDesc tupDesc = RelationGetDescr(rel);
-    Form_pg_attribute* attr = tupDesc->attrs;
+    FormData_pg_attribute* attr = tupDesc->attrs;
 
     if (nattrs != COPY_ERROR_TABLE_NUM_COL) {
         return false;
@@ -2415,8 +2415,8 @@ static void ProcessCopyErrorLogSetUps(CopyState cstate)
 static bool CheckCopySummaryTableDef(Relation rel)
 {
     int nattrs = RelationGetNumberOfAttributes(rel);
-    TupleDesc tupDesc = RelationGetDescr()rel;
-    Form_pg_attribute* attr = tupleDesc->attrs;
+    TupleDesc tupDesc = RelationGetDescr(rel);
+    FormData_pg_attribute* attr = tupDesc->attrs;
 
     if (nattrs != COPY_SUMMARY_TABLE_NUM_COL) {
         return false;
