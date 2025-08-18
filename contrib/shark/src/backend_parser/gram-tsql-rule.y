@@ -371,7 +371,7 @@ tsql_CreateProcedureStmt:
 					set_create_plsql_type_start();
 					set_function_style_a();
 				}
-			} subprogram_body
+			} tsql_subprogram_body
 				{
                                         int rc = 0;
                                         rc = CompileWhich();
@@ -446,7 +446,188 @@ tsql_CreateProcedureStmt:
 procedure_or_proc:     PROCEDURE
                        | TSQL_PROC
 				;
+tsql_subprogram_body:        {
+                                int             proc_b  = 0;
+                                int             proc_e  = 0;
+                                char    *proc_body_str  = NULL;
+                                int             proc_body_len   = 0;
+                                int             blocklevel              = 0;
+                                bool    add_declare             = true;  /* Mark if need to add a DECLARE */
+                                FunctionSources *funSrc = NULL;
+                                char *proc_header_str = NULL;
+                                int rc = 0;
+                                rc = CompileWhich();
+                                int     tok = YYEMPTY;
+                                int     pre_tok = 0;
+                                int in_procedure = 0;
+                                int max_proc_level = 0;
+                                bool in_begin = false;
+                                base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
+                                int as_count = 0;
+                                int procedure_count = 0;
 
+                                yyextra->core_yy_extra.in_slash_proc_body = true;
+                                if (u_sess->parser_cxt.eaten_begin)
+                                        blocklevel = 1;
+
+                                if (yychar == YYEOF || yychar == YYEMPTY)
+                                        tok = YYLEX;
+                                else
+                                {
+                                        tok = yychar;
+                                        yychar = YYEMPTY;
+                                }
+
+                                if (u_sess->parser_cxt.eaten_declare || DECLARE == tok)
+                                        add_declare = false;
+
+                                proc_header_str = ParseFunctionArgSrc(yyscanner);
+
+                                proc_b = yylloc;
+                                if (rc != PLPGSQL_COMPILE_NULL && rc != PLPGSQL_COMPILE_PROC) {
+                                        u_sess->plsql_cxt.procedure_first_line = GetLineNumber(yyextra->core_yy_extra.scanbuf, yylloc);
+                                }
+                                while(true)
+                                {
+                                        if (tok == YYEOF) {
+                                                proc_e = yylloc;
+                                                parser_yyerror("subprogram body is not ended correctly");
+                                                break;
+                                        }
+                                        if (!in_begin && (pre_tok == ';' || pre_tok == DECLARE || pre_tok == 0 || pre_tok == COMMENTSTRING
+                                                || pre_tok == AS || pre_tok == IS) && (tok == PROCEDURE || tok == FUNCTION)) {
+                                                in_procedure++;
+                                                max_proc_level = max_proc_level > in_procedure ? max_proc_level : in_procedure;
+                                                procedure_count++;
+                                        }
+                                        if (tok == BEGIN_P) {
+                                                pre_tok = tok;
+                                                tok = YYLEX;
+                                                if (tok != TRY && tok != CATCH) {
+                                                    blocklevel++;
+                                                    in_begin = true;
+                                                } else {
+                                                    continue;
+                                                }
+                                        }
+                                        if (tok == AS || tok == IS) {
+                                                as_count++;
+                                        }
+                                        if (tok == END_P)
+                                        {
+                                                tok = YYLEX;
+
+                                                if (!(tok == ';' || (tok == 0 || tok == END_OF_PROC))
+                                                        && tok != IF_P
+                                                        && tok != CASE
+                                                        && tok != LOOP
+                                                        && tok != WHILE_P
+                                                        && tok != REPEAT
+                                                        && tok != TRY
+                                                        && tok != CATCH)
+                                                {
+                                                        if (u_sess->attr.attr_sql.sql_compatibility == A_FORMAT && blocklevel == 1 && pre_tok == ';' && as_count == 0 && procedure_count ==0)
+                                                        {
+                                                                proc_e = yylloc;
+                                                                break;
+                                                        }
+                                                        tok = END_P;
+                                                        continue;
+                                                }
+
+                                                if (blocklevel == 1
+                                                        && (pre_tok == ';' || pre_tok == BEGIN_P)
+                                                        && (tok == ';' || (tok == 0 || tok == END_OF_PROC)))
+                                                {
+                                                        proc_e = yylloc;
+
+                                                        if (tok == ';' )
+                                                        {
+                                                                if (yyextra->lookahead_len != 0) {
+                                                                        parser_yyerror("subprogram body is not ended correctly");
+                                                                        break;
+                                                                }
+                                                                else
+                                                                {
+                                                                        const YYLTYPE yyleng = pg_yyget_leng(yyscanner);
+                                                                        yyextra->lookaheads[0] = {
+                                                                                .token = tok,
+                                                                                .yylloc = yylloc,
+                                                                                .yyleng = yyleng,
+                                                                                .prev_hold_char_loc = yylloc + yyleng,
+                                                                                .prev_hold_char = yyextra->core_yy_extra.scanbuf[yylloc + yyleng],
+                                                                        };
+                                                                        yyextra->lookahead_len = 1;
+                                                                }
+                                                        }
+                                                        if(in_procedure == 0)
+                                                                break;
+                                                        else {
+                                                                blocklevel--;
+                                                                in_procedure--;
+                                                                if ((procedure_count - as_count - 1) == in_procedure) {
+                                                                        break;
+                                                                }
+                                                        }
+                                                }
+
+                                                if (blocklevel > 1
+                                                         && (pre_tok == ';' || pre_tok == BEGIN_P)
+                                                         && (tok == ';' || tok == 0))
+                                                {
+                                                        blocklevel--;
+                                                }
+                                                in_begin = false;
+                                        }
+
+                                        pre_tok = tok;
+                                        tok = YYLEX;
+
+                                }
+
+                                if (proc_e == 0) {
+                                        ereport(errstate, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("subprogram body is not ended correctly")));
+                                }
+                                if (max_proc_level > 0) {
+                                        u_sess->parser_cxt.has_subprogram = true;
+                                } else {
+                                        u_sess->parser_cxt.has_subprogram = false;
+                                }
+
+                                proc_body_len = proc_e - proc_b + 1 ;
+                                if (add_declare)
+                                {
+                                        proc_body_str = (char *)palloc0(proc_body_len + DECLARE_LEN + 1);
+                                        rc = strcpy_s(proc_body_str, proc_body_len + DECLARE_LEN + 1, DECLARE_STR);
+                                        securec_check(rc, "", "");
+                                        rc = strncpy_s(proc_body_str + DECLARE_LEN, proc_body_len + 1,
+                                                        yyextra->core_yy_extra.scanbuf + proc_b, proc_body_len - 1);
+                                        securec_check(rc, "", "");
+                                        proc_body_len = DECLARE_LEN + proc_body_len;
+                                }
+                                else
+                                {
+                                        proc_body_str = (char *)palloc0(proc_body_len + 1);
+                                        rc = strncpy_s(proc_body_str, proc_body_len + 1,
+                                                yyextra->core_yy_extra.scanbuf + proc_b, proc_body_len - 1);
+                                        securec_check(rc, "", "");
+                                }
+
+                                proc_body_str[proc_body_len] = '\0';
+
+                                yyextra->core_yy_extra.in_slash_proc_body = false;
+                                yyextra->core_yy_extra.dolqstart = NULL;
+
+                                yyextra->core_yy_extra.query_string_locationlist =
+                                        lappend_int(yyextra->core_yy_extra.query_string_locationlist, yylloc);
+
+                                funSrc = makeNode(FunctionSources);
+                                funSrc->bodySrc   = proc_body_str;
+                                funSrc->headerSrc = proc_header_str;
+
+                                $$ = funSrc;
+                        }
+                  ;
 ColConstraintElem:     IDENTITY_P identity_seed_increment
                             {
                                 Constraint *n = makeNode(Constraint);
@@ -758,11 +939,11 @@ DBCCStmt:  DBCCCheckIdentStmt
 			;
 
 TSQL_AnonyBlockStmt:
-		DECLARE { u_sess->parser_cxt.eaten_declare = true; u_sess->parser_cxt.eaten_begin = false; } subprogram_body
+		DECLARE { u_sess->parser_cxt.eaten_declare = true; u_sess->parser_cxt.eaten_begin = false; } tsql_subprogram_body
 			{
 				$$ = (Node *)TsqlMakeAnonyBlockFuncStmt(DECLARE, ((FunctionSources*)$3)->bodySrc);
 			}
-		| BEGIN_P { u_sess->parser_cxt.eaten_declare = true; u_sess->parser_cxt.eaten_begin = true; } subprogram_body
+		| BEGIN_P { u_sess->parser_cxt.eaten_declare = true; u_sess->parser_cxt.eaten_begin = true; } tsql_subprogram_body
 			{
 				$$ = (Node *)TsqlMakeAnonyBlockFuncStmt(BEGIN_P, ((FunctionSources*)$3)->bodySrc);
 			}
@@ -860,7 +1041,7 @@ TSQL_CreateFunctionStmt:
 					set_create_plsql_type_start();
 					set_function_style_a();
 				  }
-			  } subprogram_body
+			  } tsql_subprogram_body
 				{
 					int rc = 0;
 					rc = CompileWhich();
@@ -1488,6 +1669,27 @@ tsql_TransactionStmt:
 														(Node *)makeString($3)));
 					$$ = (Node *)n;
 				}
+                       | BEGIN_NON_ANOYBLOCK TRY
+                                {
+                                        TransactionStmt *n = makeNode(TransactionStmt);
+                                        n->kind = TRANS_STMT_BEGIN_TRY;
+                                        n->options = NIL;
+                                        $$ = (Node *)n;
+                                }
+                       | END_P TRY BEGIN_P CATCH
+                                {
+                                        TransactionStmt *n = makeNode(TransactionStmt);
+                                        n->kind = TRANS_STMT_END_TRY_BEGIN_CATCH;
+                                        n->options = NIL;
+                                        $$ = (Node *)n;
+                                }
+                       | END_P CATCH
+                                {
+                                        TransactionStmt *n = makeNode(TransactionStmt);
+                                        n->kind = TRANS_STMT_END_CATCH;
+                                        n->options = NIL;
+                                        $$ = (Node *)n;
+                                }
 		;
 
 /*

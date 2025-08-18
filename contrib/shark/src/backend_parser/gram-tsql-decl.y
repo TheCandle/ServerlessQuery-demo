@@ -3,7 +3,7 @@
 %type <list> identity_seed_increment
 %type <node> DBCCCheckIdentStmt DBCCStmt tsql_stmt tsql_CreateProcedureStmt tsql_IndexStmt tsql_TransactionStmt tsql_InsertStmt
 %type <node> tsql_UseStmt
-%token <keyword> CHECKIDENT DBCC NO_INFOMSGS NORESEED RESEED SAVE TRAN TSQL_CLUSTERED TSQL_NONCLUSTERED TSQL_COLUMNSTORE
+%token <keyword> CATCH CHECKIDENT DBCC NO_INFOMSGS NORESEED RESEED SAVE TRAN TRY TSQL_CLUSTERED TSQL_NONCLUSTERED TSQL_COLUMNSTORE
 %type <keyword>  tsql_opt_clustered tsql_opt_columnstore tsql_unique_clustered tsql_primary_key_clustered
 %token <keyword> TSQL_NOLOCK TSQL_READUNCOMMITTED TSQL_UPDLOCK TSQL_REPEATABLEREAD TSQL_READCOMMITTED TSQL_TABLOCK TSQL_TABLOCKX TSQL_PAGLOCK TSQL_ROWLOCK TSQL_READPAST TSQL_XLOCK TSQL_NOEXPAND
 %token <keyword> TSQL_PROC TSQL_TEXTIMAGE_ON
@@ -17,6 +17,7 @@
 %type <node> TSQL_AnonyBlockStmt TSQL_CreateFunctionStmt TSQL_DoStmt
 %type <str> tsql_opt_transaction_name
 %type <keyword> tsql_transaction_keywords
+%type <fun_src> tsql_subprogram_body
 %token TSQL_UNIQUE_CLUSTERED TSQL_UNIQUE_NONCLUSTERED TSQL_PRIMAY_KEY_NONCLUSTERED TSQL_PRIMAY_KEY_CLUSTERED
 %type <str> tsql_table_hint_kw_no_with datediff_arg
 %type <list> tsql_table_hint_expr_no_with tsql_table_hint_expr_with tsql_table_hint_list tsql_opt_table_hint_expr_with

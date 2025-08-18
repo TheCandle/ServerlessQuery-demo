@@ -143,7 +143,12 @@ DROP FUNCTION IF EXISTS sys.sql_varianteq(sys.sql_variant, sys.sql_variant);
 DROP FUNCTION IF EXISTS sys.sql_variantcmp(sys.sql_variant, sys.sql_variant);
 
 drop type IF EXISTS sys.sql_variant cascade;
-
+DROP FUNCTION IF EXISTS sys.error_number();
+DROP FUNCTION IF EXISTS sys.error_severity();
+DROP FUNCTION IF EXISTS sys.error_state();
+DROP FUNCTION IF EXISTS sys.error_procedure();
+DROP FUNCTION IF EXISTS sys.error_line();
+DROP FUNCTION IF EXISTS sys.error_message();
 drop function if exists sys.databasepropertyex (nvarchar(128), nvarchar(128));
 drop function if exists sys.suser_id_internal(IN login nvarchar(256));
 drop function if exists sys.suser_id(IN login nvarchar(256));

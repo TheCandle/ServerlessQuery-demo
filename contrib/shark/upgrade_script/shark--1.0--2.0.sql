@@ -2326,6 +2326,36 @@ LANGUAGE C VOLATILE STRICT ;
 
 CREATE CAST (sys.SQL_VARIANT AS CHAR)
 WITH FUNCTION sys.sqlvariant_char (sys.SQL_VARIANT);
+
+CREATE OR REPLACE FUNCTION sys.error_number()
+RETURNS INT
+AS '$libdir/shark', 'error_number'
+LANGUAGE C VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION sys.error_severity()
+RETURNS INT
+AS '$libdir/shark', 'error_severity'
+LANGUAGE C VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION sys.error_state()
+RETURNS INT
+AS '$libdir/shark', 'error_state'
+LANGUAGE C VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION sys.error_procedure()
+RETURNS TEXT
+AS '$libdir/shark', 'error_procedure'
+LANGUAGE C VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION sys.error_message()
+RETURNS TEXT
+AS '$libdir/shark', 'error_message'
+LANGUAGE C VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION sys.error_line()
+RETURNS INT
+AS '$libdir/shark', 'error_line'
+LANGUAGE C VOLATILE STRICT ;
 reset search_path;
 
 -- sys.databasepropertyex
@@ -2631,14 +2661,14 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varbinary(IN typmod INTEGER,
                                                                   IN arg anyelement,
-                                                                  IN try BOOL,
+                                                                  IN p_try BOOL,
                                                                   IN p_style NUMERIC DEFAULT 0)
 RETURNS sys.varbinary
 AS
 $BODY$
 DECLARE result sys.varbinary;
 BEGIN
-    IF try THEN
+    IF p_try THEN
         RETURN sys.shark_try_conv_to_varbinary(typmod, arg, p_style);
     ELSE
         IF pg_typeof(arg) IN ('text'::regtype, 'nvarchar2'::regtype, 'bpchar'::regtype) THEN
@@ -2659,13 +2689,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varbinary(IN typmod INTEGER,
                                                                   IN arg VARCHAR,
-                                                                  IN try BOOL,
+                                                                  IN p_try BOOL,
                                                                   IN p_style NUMERIC DEFAULT 0)
 RETURNS sys.varbinary
 AS
 $BODY$
 BEGIN
-    IF try THEN
+    IF p_try THEN
         RETURN sys.shark_try_conv_string_to_varbinary(arg, p_style);
     ELSE
         RETURN sys.shark_conv_string_to_varbinary(arg, p_style);
@@ -4986,7 +5016,7 @@ RETURNS NULL ON NULL INPUT;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER,
                                                             IN arg TEXT,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITH TIME ZONE
 AS
@@ -5000,7 +5030,7 @@ BEGIN
         v_res_datatype := PG_CATALOG.format('TIMESTAMP WITH TIME ZONE(%s)', typmod);
     END IF;
 
-    IF try THEN
+    IF p_try THEN
 	    RETURN sys.shark_try_conv_string_to_datetimeoffset(v_res_datatype, arg, p_style);
     ELSE
         RETURN sys.shark_conv_string_to_datetimeoffset(v_res_datatype, arg, p_style);
@@ -5012,13 +5042,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER,
                                                             IN arg VARCHAR,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITH TIME ZONE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_datetimeoffset(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_datetimeoffset(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -5026,13 +5056,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER,
                                                             IN arg NVARCHAR2,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITH TIME ZONE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_datetimeoffset(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_datetimeoffset(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -5040,13 +5070,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetimeoffset(IN typmod INTEGER,
                                                             IN arg BPCHAR,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITH TIME ZONE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_datetimeoffset(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_datetimeoffset(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -5054,7 +5084,7 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER,
                                                             IN arg TEXT,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS SMALLDATETIME
 AS
@@ -5068,7 +5098,7 @@ BEGIN
         v_res_datatype := PG_CATALOG.format('SMALLDATETIME(%s)', typmod);
     END IF;
 
-    IF try THEN
+    IF p_try THEN
 	    RETURN sys.shark_try_conv_string_to_datetime_v2(v_res_datatype, arg, p_style);
     ELSE
         RETURN sys.shark_conv_string_to_datetime_v2(v_res_datatype, arg, p_style);
@@ -5080,13 +5110,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER,
                                                             IN arg VARCHAR,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS SMALLDATETIME
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_smalldatetime(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_smalldatetime(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -5094,13 +5124,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER,
                                                             IN arg NVARCHAR2,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS SMALLDATETIME
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_smalldatetime(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_smalldatetime(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -5108,13 +5138,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER,
                                                             IN arg BPCHAR,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS SMALLDATETIME
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_smalldatetime(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_smalldatetime(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -6059,13 +6089,13 @@ RETURNS NULL ON NULL INPUT;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varchar(IN typename TEXT,
                                                         IN arg ANYELEMENT,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT -1)
 RETURNS VARCHAR
 AS
 $BODY$
 BEGIN
-	IF try THEN
+	IF p_try THEN
 	    RETURN sys.shark_try_conv_to_varchar(typename, arg, p_style);
     ELSE
 	    RETURN sys.shark_conv_to_varchar(typename, arg, p_style);
@@ -6371,13 +6401,13 @@ RETURNS NULL ON NULL INPUT;
 
 -- conversion to date
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg TEXT,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS DATE
 AS
 $BODY$
 BEGIN
-    IF try THEN
+    IF p_try THEN
         RETURN sys.shark_try_conv_string_to_datetime2('DATE', arg, p_style);
     ELSE
 	    RETURN sys.shark_conv_string_to_datetime2('DATE', arg, p_style);
@@ -6388,46 +6418,46 @@ LANGUAGE plpgsql
 IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg VARCHAR,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS DATE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_date(arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_date(arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
 IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg NVARCHAR2,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS DATE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_date(arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_date(arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
 IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg BPCHAR,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS DATE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_date(arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_date(arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
 IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_date(IN arg anyelement,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
 												        IN p_style NUMERIC DEFAULT 0)
 RETURNS DATE
 AS
@@ -6435,7 +6465,7 @@ $BODY$
 DECLARE
     resdate DATE;
 BEGIN
-    IF try THEN
+    IF p_try THEN
         resdate := sys.shark_try_conv_to_date(arg);
     ELSE
         BEGIN
@@ -6456,7 +6486,7 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
                                                         IN arg TEXT,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
 												        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIME
 AS
@@ -6470,7 +6500,7 @@ BEGIN
         v_res_datatype := PG_CATALOG.format('TIME(%s)', typmod);
     END IF;
 
-    IF try THEN
+    IF p_try THEN
 	    RETURN sys.shark_try_conv_string_to_datetime2(v_res_datatype, arg, p_style);
     ELSE
 	    RETURN sys.shark_conv_string_to_datetime2(v_res_datatype, arg, p_style);
@@ -6482,13 +6512,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
                                                         IN arg VARCHAR,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS TIME
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -6496,13 +6526,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
                                                         IN arg BPCHAR,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS TIME
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -6510,13 +6540,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_time(IN typmod INTEGER,
                                                         IN arg NVARCHAR2,
-                                                        IN try BOOL,
+                                                        IN p_try BOOL,
                                                         IN p_style NUMERIC DEFAULT 0)
 RETURNS TIME
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_time(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -6524,7 +6554,7 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
                                                             IN arg TEXT,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITHOUT TIME ZONE
 AS
@@ -6538,7 +6568,7 @@ BEGIN
         v_res_datatype := PG_CATALOG.format('TIMESTAMP WITHOUT TIME ZONE(%s)', typmod);
     END IF;
 
-    IF try THEN
+    IF p_try THEN
 	    RETURN sys.shark_try_conv_string_to_datetime2(v_res_datatype, arg, p_style);
     ELSE
         RETURN sys.shark_conv_string_to_datetime2(v_res_datatype, arg, p_style);
@@ -6550,13 +6580,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
                                                             IN arg VARCHAR,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITHOUT TIME ZONE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -6564,13 +6594,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
                                                             IN arg NVARCHAR2,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITHOUT TIME ZONE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
@@ -6578,13 +6608,13 @@ IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_datetime2(IN typmod INTEGER,
                                                             IN arg BPCHAR,
-                                                            IN try BOOL,
+                                                            IN p_try BOOL,
 													        IN p_style NUMERIC DEFAULT 0)
 RETURNS TIMESTAMP WITHOUT TIME ZONE
 AS
 $BODY$
 BEGIN
-    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, try, p_style);
+    RETURN sys.shark_conv_helper_to_datetime2(typmod, arg::TEXT, p_try, p_style);
 END;
 $BODY$
 LANGUAGE plpgsql
