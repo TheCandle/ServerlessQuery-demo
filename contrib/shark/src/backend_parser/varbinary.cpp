@@ -215,8 +215,10 @@ Datum varbinaryin(PG_FUNCTION_ARGS)
     SET_VARSIZE(result, len + VARHDRSZ);
 
     rp = VARDATA(result);
-    errno_t rc = memcpy_s(rp, len, tp, len);
-    securec_check(rc, "\0", "\0");
+    if (len > 0) {
+        errno_t rc = memcpy_s(rp, len, tp, len);
+        securec_check(rc, "\0", "\0");
+    }
 
     PG_RETURN_BYTEA_P(result);
 }

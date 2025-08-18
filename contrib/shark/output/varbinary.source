@@ -148,6 +148,24 @@ SELECT id, a FROM t_varchar;
   1 | aa
 (1 row)
 
+select cast('' as varbinary);
+ varbinary 
+-----------
+ 0x
+(1 row)
+
+select CAST('中文' AS varbinary); -- 多字节字符测试
+   varbinary    
+----------------
+ 0xe4b8ade69687
+(1 row)
+
+select CAST('123456' AS varbinary(3)); -- 截断测试
+ varbinary 
+-----------
+ 0x313233
+(1 row)
+
 -- test typecast int
 INSERT INTO t1 VALUES (8, 255);
 INSERT INTO t1 VALUES (9, 256);

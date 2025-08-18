@@ -52,6 +52,9 @@ SELECT id, a::varchar FROM t3 WHERE a = 'aa'::varchar::varbinary;
 CREATE TABLE t_varchar (id int, a varchar);
 INSERT INTO t_varchar VALUES (1, 'aa'::varbinary); -- assignment cast allow
 SELECT id, a FROM t_varchar;
+select cast('' as varbinary);
+select CAST('中文' AS varbinary); -- 多字节字符测试
+select CAST('123456' AS varbinary(3)); -- 截断测试
 -- test typecast int
 INSERT INTO t1 VALUES (8, 255);
 INSERT INTO t1 VALUES (9, 256);
