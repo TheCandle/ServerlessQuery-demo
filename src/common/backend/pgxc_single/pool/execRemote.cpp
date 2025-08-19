@@ -3395,7 +3395,7 @@ static bool GetTupleFromConn(RemoteQueryState* node, void* slot, ParallelFunctio
                 }
 
                 if (parallelfunctionstate != NULL) {
-                    if (parallelfunctionstate->tupstore != NULL && !TupIsNull((TupleTableSlot*)slot)) {
+                    if (parallelfunctionstate->tupstore != NULL && !TTS_EMPTY((TupleTableSlot*)slot)) {
                         /*
                          * Store the tuple received from each node into the tuplestore in
                          * ParallelFunction and we won't return for each tuple recivied here.
@@ -5684,7 +5684,7 @@ PGXCNodeAllHandles* get_exec_connections(
         is_query_coord_only = true;
 
     if (exec_nodes != NULL) {
-        if (exec_nodes->en_expr) {
+        if (exec_nodes->en_expr && planstate != NULL) {
             /* execution time determining of target Datanodes */
             bool isnull = false;
             MemoryContext oldContext;

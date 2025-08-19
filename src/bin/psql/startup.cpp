@@ -337,7 +337,10 @@ PGconn* PQconnectdbMultiHostParams(const char** keywords,
             conn = PQconnectdbParams(keywords, values, (int)true);
             pass = false;
             status = CONNECTION_BAD;
-            if (conn == NULL || conn->sock < 0) {
+            if (conn == NULL) {
+                fprintf(stderr, "failed to create connection object for host %s\n", hostname);
+                break;
+            } else if (conn->sock < 0) {
                 fprintf(stderr,
                     "failed to connect %s:%s.\n",
                     ((conn->pghost == NULL) ? "Unknown" : conn->pghost),

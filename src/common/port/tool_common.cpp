@@ -546,7 +546,9 @@ int SSInitXlogDir(char*** xlogDirs)
             }
         }
     }
-    closedir(dir);
+    if (dir != NULL) {
+        closedir(dir);
+    }
     return xlogDirNum;
 }
 

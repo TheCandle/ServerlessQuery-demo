@@ -5566,15 +5566,15 @@ void InitializeNumSlruBuffers(void)
     SetSlruBufferDefaultNum();
     /* Do str copy and remove space. */
     char* attr = TrimStrQuote(g_instance.attr.attr_storage.num_slru_buffers_str, true);
+    if (attr == NULL || attr[0] == '\0') { /* use default values */
+        return;
+    }
     if (!CheckOptionCombine(attr)) {
         ereport(FATAL, (errcode(ERRCODE_OPERATE_INVALID_PARAM),
             errmsg("Invalid attribute for internal slru buffers."),
             errdetail("The attribute contains unallowed characters, "
                       "only a-z, A-Z, 0-9, \',\', \'=\', '_' are allowed, the attribute: %s.",
                       attr)));
-    }
-    if (attr == NULL || attr[0] == '\0') { /* use default values */
-        return;
     }
     const char* pdelimiter = ",";
     List *res = NULL;

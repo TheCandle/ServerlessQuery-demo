@@ -2629,6 +2629,10 @@ static void PgxcGroupSetSeqNodes(const char* group_name, bool allnodes)
             relowner = reltup->relowner;
 
             schName = get_namespace_name(nspoid);
+            if (schName == NULL)
+                ereport(ERROR,
+                    (errcode(ERRCODE_CACHE_LOOKUP_FAILED),
+                        errmsg("cache lookup failed for namespace %u", nspoid)));
             seqName = quote_identifier(relName);
             nspName = quote_identifier(schName);
 

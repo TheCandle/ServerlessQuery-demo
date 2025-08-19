@@ -370,7 +370,7 @@ static void remove_oldest_log(const char *prefix_name, const char *log_path, int
         rc = snprintf_s(pathname, MAXPGPATH, MAXPGPATH - 1, "%s/%s", log_path, file_list[remove_cnt]->fileName);
         securec_check_ss_c(rc, "\0", "\0");
         if (remove(pathname) < 0) {
-            printf(_("%s: remove log file %s failed!\n"), prefix_name, pathname, gs_strerror(errno));
+            printf(_("%s: remove log file %s failed, error: %s!\n"), prefix_name, pathname, gs_strerror(errno));
             continue;
         }
 

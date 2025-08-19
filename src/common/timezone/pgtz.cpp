@@ -335,7 +335,7 @@ pg_tzenum* pg_tzenumerate_start(void)
 
 void pg_tzenumerate_end(pg_tzenum* dir)
 {
-    while (dir->depth >= 0) {
+    while (dir && dir->depth >= 0) {
         FreeDir(dir->dirdesc[dir->depth]);
         pfree_ext(dir->dirname[dir->depth]);
         dir->depth--;

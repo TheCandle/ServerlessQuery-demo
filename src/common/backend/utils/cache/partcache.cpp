@@ -1242,9 +1242,9 @@ static void PartRelCacheInitialize(void)
 
 void partitionInitPartRel(Relation rel, Partition part)
 {
+    Assert(PointerIsValid(rel) && PointerIsValid(part));
     Assert(part->partrel == NULL);
     Relation relation;
-    Assert(PointerIsValid(rel) && PointerIsValid(part));
     /*
      * If the rel is subpartitiontable and the part is subpartition, we need open Level 1 partition to get subpartition
      * relation. When the caller gets subpartition, The level-1 partition has been locked. Therefore, partitionOpen used

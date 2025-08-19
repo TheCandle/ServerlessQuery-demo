@@ -3550,8 +3550,9 @@ void PoolManagerReleaseConnections(const char* status_array, int array_size, boo
          * the reason is that its cache thread will lead to other nodes
          * in the creation of the database failed
          */
-        if (strcmp(agent->pool->database, "template1") == 0)
+        if (agent && agent->pool && strcmp(agent->pool->database, "template1") == 0) {
             force_destroy = true;
+        }
 
         agent_release_connections(agent, force_destroy);
     } else {

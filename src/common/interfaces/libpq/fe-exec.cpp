@@ -513,7 +513,7 @@ void* pqResultAlloc(PGresult* res, size_t nBytes, bool isBinary)
     }
 
     /* If there's enough space in the current block, no problem. */
-    if (nBytes <= (size_t)(unsigned)res->spaceLeft) {
+    if (res->curBlock && nBytes <= (size_t)(unsigned)res->spaceLeft) {
         space = res->curBlock->space + res->curOffset;
         res->curOffset += nBytes;
         res->spaceLeft -= nBytes;

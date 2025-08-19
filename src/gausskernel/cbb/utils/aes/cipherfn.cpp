@@ -900,6 +900,11 @@ char *encryptECString(char* src_plain_text, int mode)
     GS_UCHAR* cipherkey = NULL;
     char* encodetext = NULL;
     errno_t ret = EOK;
+    
+    if (src_plain_text == NULL || *src_plain_text == '\0') {
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+            errmsg("Invalid plain text: cannot be NULL or empty")));
+    }
 
     /* First, get encrypt key */
     cipherkey = getECKeyString((KeyMode)mode);

@@ -1710,6 +1710,11 @@ double CopyUHeapDataInternal(Relation oldHeap, Relation oldIndex, Relation newHe
 
     /* Set up sorting if wanted */
     if (useSort) {
+        if (oldIndex == NULL) {
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                     errmsg("cannot use sort without an index for CLUSTER")));
+        }
         int workMem = (memUsage->work_mem > 0) ? memUsage->work_mem : u_sess->attr.attr_memory.maintenance_work_mem;
         int maxMem = memUsage->max_mem;
         tuplesort = tuplesort_begin_cluster(oldTupDesc, oldIndex, workMem, false, maxMem, true);
@@ -1797,7 +1802,7 @@ double CopyUHeapDataInternal(Relation oldHeap, Relation oldIndex, Relation newHe
                     (errcode(ERRCODE_WRONG_OBJECT_TYPE), errmsg("CLUSTER does not support lossy index conditions")));
 
             buf = indexScan->xs_cbuf;
-        } else {
+        } else if (heapScan != NULL) {
             if ((UHeapGetNextSlotGuts((TableScanDesc)heapScan, ForwardScanDirection, slot)) != NULL)
                 utuple = ExecGetUHeapTupleFromSlot(slot);
             else
@@ -1808,6 +1813,8 @@ double CopyUHeapDataInternal(Relation oldHeap, Relation oldIndex, Relation newHe
             {
             }
             ADIO_END();
+        } else {
+            ereport(ERROR, (errmsg("CLUSTER failed: invalid scan.")));
         }
 
         LockBuffer(buf, BUFFER_LOCK_SHARE);
@@ -1990,6 +1997,11 @@ double copy_heap_data_internal(Relation OldHeap, Relation OldIndex, Relation New
 
     /* Set up sorting if wanted */
     if (use_sort) {
+        if (OldIndex == NULL) {
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                     errmsg("cannot use sort without an index for CLUSTER")));
+        }
         int workMem = (memUsage->work_mem > 0) ? memUsage->work_mem : u_sess->attr.attr_memory.maintenance_work_mem;
         int maxMem = memUsage->max_mem;
         tuplesort = tuplesort_begin_cluster(oldTupDesc, OldIndex, workMem, false, maxMem, false);
@@ -2070,7 +2082,7 @@ double copy_heap_data_internal(Relation OldHeap, Relation OldIndex, Relation New
 
             buf = RelationIsCrossBucketIndex(OldIndex) ? 
                 ((HBktIdxScanDesc)indexScan)->currBktIdxScan->xs_cbuf : indexScan->xs_cbuf;
-        } else {
+        } else if (heapScan != NULL) {
             tuple =  (HeapTuple) tableam_scan_getnexttuple(heapScan, ForwardScanDirection);
             if (tuple == NULL)
                 break;
@@ -2083,6 +2095,8 @@ double copy_heap_data_internal(Relation OldHeap, Relation OldIndex, Relation New
                 Start_Prefetch(heapScan, &scanaccessor, ForwardScanDirection);
             }
             ADIO_END();
+        } else {
+            ereport(ERROR, (errmsg("CLUSTER failed: invalid scan.")));
         }
 
         LockBuffer(buf, BUFFER_LOCK_SHARE);

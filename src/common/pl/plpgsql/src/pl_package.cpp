@@ -669,6 +669,10 @@ void plpgsql_pkg_HashTableDelete(PLpgSQL_package* pkg)
 
 void delete_package(PLpgSQL_package* pkg)
 {
+    if (pkg == NULL) {
+        ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmodule(MOD_PLSQL),
+            errmsg("Delete package pkg failed: invalid pkg.")));
+    }
     if (pkg->use_count > 0)
         return;
     ListCell* l = NULL;
@@ -1118,15 +1122,15 @@ PLpgSQL_package* plpgsql_pkg_compile(Oid pkgOid, bool for_validator, bool isSpec
      * Lookup the gs_package tuple by Oid; we'll need it in any case
      */
     pkg_tup = SearchSysCache1(PACKAGEOID, ObjectIdGetDatum(pkgOid));
+    if (!HeapTupleIsValid(pkg_tup)) {
+        ereport(ERROR,  (errmodule(MOD_PLSQL),  errcode(ERRCODE_CACHE_LOOKUP_FAILED),
+                errmsg("cache lookup failed for package %u, while compile package", pkgOid)));
+    }
     AclResult aclresult = pg_package_aclcheck(pkgOid, GetUserId(), ACL_EXECUTE);
     Form_gs_package pkgForm = (Form_gs_package)GETSTRUCT(pkg_tup);
     NameData pkgname = pkgForm->pkgname;
     if (aclresult != ACLCHECK_OK) {
         aclcheck_error(aclresult, ACL_KIND_PACKAGE, pkgname.data);
-    }
-    if (!HeapTupleIsValid(pkg_tup)) {
-        ereport(ERROR,  (errmodule(MOD_PLSQL),  errcode(ERRCODE_CACHE_LOOKUP_FAILED),
-                errmsg("cache lookup failed for package %u, while compile package", pkgOid)));
     }
     pkg_struct = (Form_gs_package)GETSTRUCT(pkg_tup);
     hashkey.pkgOid = pkgOid;
@@ -1454,6 +1458,11 @@ void InsertError(Oid objId)
         id = objId;
         HeapTuple tuple;
         bool isnull = false;
+        if (u_sess->plsql_cxt.curr_compile_context == NULL) {
+            ereport(ERROR,
+                (errmodule(MOD_PLSQL), errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                    errmsg("create package failed: invalid context.")));
+        }
         PLpgSQL_function* func = u_sess->plsql_cxt.curr_compile_context->plpgsql_curr_compile;
         tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(func->fn_oid));
         Form_pg_proc procStruct = (Form_pg_proc)GETSTRUCT(tuple);
@@ -1476,6 +1485,11 @@ void InsertError(Oid objId)
     } else if ((rc == PLPGSQL_COMPILE_PACKAGE ||
         rc == PLPGSQL_COMPILE_PACKAGE_PROC)) {
         HeapTuple tuple;
+        if (u_sess->plsql_cxt.curr_compile_context == NULL) {
+            ereport(ERROR,
+                (errmodule(MOD_PLSQL), errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                    errmsg("create package failed: invalid context.")));
+        }
         PLpgSQL_package* pkg = u_sess->plsql_cxt.curr_compile_context->plpgsql_curr_compile_package;
         id = pkg->pkg_oid;
         tuple = SearchSysCache1(PACKAGEOID, ObjectIdGetDatum(pkg->pkg_oid));

@@ -1838,8 +1838,10 @@ static bool describeOneTableDetails(const char* schemaname, const char* relation
             tableinfo.relkind == 'f' || tableinfo.relkind == 'm' || tableinfo.relkind == 'e' ||
             tableinfo.relkind == 'o')
             headers[cols++] = gettext_noop("Description");
-        if ((tableinfo.relkind == 'r' || tableinfo.relkind == 'm') && strstr(tableinfo.reloptions, ORIENTATION_TIMESERIES))
+        if ((tableinfo.relkind == 'r' || tableinfo.relkind == 'm') && (tableinfo.reloptions != NULL) &&
+            strstr(tableinfo.reloptions, ORIENTATION_TIMESERIES)) {
             headers[cols++] = gettext_noop("KV Type");
+        }
     }
 
     printTableInit(&cont, &myopt, title.data, cols, numrows);
@@ -2061,7 +2063,8 @@ static bool describeOneTableDetails(const char* schemaname, const char* relation
             /* For timeseries table, 1,2,3 stands for column type: ATT_KV_TAG, ATT_KV_FIELD, ATT_KV_TIMETAG,
              * see parsenodes.h
              */
-            if ((tableinfo.relkind == 'r' || tableinfo.relkind == 'm') && strstr(tableinfo.reloptions, ORIENTATION_TIMESERIES)) {
+            if ((tableinfo.relkind == 'r' || tableinfo.relkind == 'm') && (tableinfo.reloptions != NULL) &&
+                strstr(tableinfo.reloptions, ORIENTATION_TIMESERIES)) {
                 char* kvtype = PQgetvalue(res, i, firstvcol + 3);
                 printTableAddCell(&cont, (char*)((kvtype[0] == '1' ? "kvtag" : (kvtype[0] == '2'
                     ? "kvfield" : (kvtype[0] == '3' ?  "kvtime" : (kvtype[0] == '4' ? "kvhide" : "none"))))),

@@ -124,9 +124,11 @@ void do_memory_evicted(HTAB *cached_models)
         if ((double)gs_random() / (double)MAX_RANDOM_VALUE <
             1.0 - (cache->recent_used_time - min_timestamp) / diff) {
             if (pos_evicted < num_evicted) {
-                pfree_ext(cache->model->bayesNetModel);
-                MemoryContextDelete(cache->model->mcontext);
-                pfree_ext(cache->model);
+                if (cache->model) {
+                    pfree_ext(cache->model->bayesNetModel);
+                    MemoryContextDelete(cache->model->mcontext);
+                    pfree_ext(cache->model);
+                }
                 hash_search(cached_models, cache->model_name, HASH_REMOVE, NULL);
                 pos_evicted++;
             }
@@ -168,7 +170,9 @@ static void insert_model_into_cache(StatsModel *model, const char *model_name)
     AboModelCacheEntry *cache = (AboModelCacheEntry *)hash_search(g_instance.abo_cxt.models, model_name,
         HASH_ENTER, &found);
     if (found) { // Recheck existence of models in case of concurrent writing
-        MemoryContextDelete(model->mcontext);
+        if (model && model->mcontext) {
+            MemoryContextDelete(model->mcontext);
+        }
         pfree_ext(model);
         cache->recent_used_time = current_time;
     } else {

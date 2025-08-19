@@ -284,11 +284,11 @@ static void CustomizableCleanupPriorWALFiles(void)
             }
             if (debug)
                 fprintf(stderr, "\n");
+            closedir(xldir);
         } else
             fprintf(
                 stderr, "%s: could not open archive location \"%s\": %s\n", progname, archiveLocation, strerror(errno));
 
-        closedir(xldir);
         fflush(stderr);
     }
 }

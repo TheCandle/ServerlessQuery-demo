@@ -252,7 +252,7 @@ int gs_popen_security(const char* command)
  */
 int gs_system_security(const char* command)
 {
-    pid_t pid;
+    pid_t pid = -1;
     int status = 0;
     struct sigaction ign, intact, quitact;
     sigset_t newsigblock, oldsigblock;

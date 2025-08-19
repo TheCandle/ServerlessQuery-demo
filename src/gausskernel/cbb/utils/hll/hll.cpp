@@ -275,8 +275,10 @@ void Hll::HllInit()
 /* free a hll, execute it before delere the class hll */
 void Hll::HllFree()
 {
-    pfree_ext(hllObject->hllData);
-    pfree_ext(hllObject);
+    if (hllObject) {
+        pfree_ext(hllObject->hllData);
+        pfree_ext(hllObject);
+    }
 }
 
 /* set a hll to empty */

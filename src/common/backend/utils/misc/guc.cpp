@@ -9257,6 +9257,11 @@ void ExecSetVariableStmt(VariableSetStmt* stmt, ParamListInfo paramInfo)
              * but we put it here anyway since it's a special case and not
              * related to any GUC variable.
              */
+             if (NULL == stmt->name) {
+                 ereport(ERROR, (errcode(ERRCODE_INVALID_OPERATION), errmsg("unexpected SET name: %s", stmt->name)));
+                 break;
+             }
+
             if (strcmp(stmt->name, "TRANSACTION") == 0) {
                 ListCell* head = NULL;
 
@@ -10710,8 +10715,8 @@ static char* _ShowOption(struct config_generic* record, bool use_units, bool is_
 
             if (conf->show_hook && is_show)
                 val = (*conf->show_hook)();
-            else if (strcasecmp(record->name, "identity") == 0 ||
-                     strcasecmp(record->name, "last_insert_id") == 0) {
+            else if (conf->show_hook &&
+                (strcasecmp(record->name, "identity") == 0 || strcasecmp(record->name, "last_insert_id") == 0)) {
                 val = (*conf->show_hook)();
             }
             else if (*conf->variable && **conf->variable)

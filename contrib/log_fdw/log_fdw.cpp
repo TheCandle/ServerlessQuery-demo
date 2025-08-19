@@ -350,8 +350,8 @@ static bool whether_refuted_by_range(
 
     Node* range_constraint = make_and_qual((Node*)less_than, (Node*)great_than);
     List* base_restriction = lappend(NIL, range_constraint);
-    List* qual = node->ss.ps.plan->qual;
     Assert(node->ss.ps.plan && node->ss.ps.plan->qual);
+    List* qual = node->ss.ps.plan->qual;
     bool refuted = predicate_refuted_by(base_restriction, qual, true);
 
     list_free(base_restriction);
@@ -368,8 +368,8 @@ static bool whether_refuted_by(ForeignScanState* node, Var* var_node, int text_c
     Node* const_constraint = build_const_constraint(expr_node, const_val, false);
 
     List* base_restriction = lappend(NIL, const_constraint);
-    List* qual = node->ss.ps.plan->qual;
     Assert(node->ss.ps.plan && node->ss.ps.plan->qual);
+    List* qual = node->ss.ps.plan->qual;
     bool refuted = predicate_refuted_by(base_restriction, qual, true);
 
     /* free memory */

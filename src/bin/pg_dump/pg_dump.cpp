@@ -19371,7 +19371,7 @@ static void dumpExtensionLinkedGrammer(Archive *fout, const TableInfo *tbinfo, P
         }
         /* G/L: DISTRIBUTE BY RANGE/LIST */
         else if (IsLocatorDistributedBySlice(tbinfo->pgxclocatortype)) {
-            PQExpBuffer result;
+            PQExpBuffer result = NULL;
             if (tbinfo->pgxclocatortype == 'G') {
                 result = DumpRangeDistribution(fout, tbinfo);
             } else if (tbinfo->pgxclocatortype == 'L') {

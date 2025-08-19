@@ -49,7 +49,7 @@ int system(const char* command);
 
 int system(const char* command)
 {
-    pid_t pid;
+    pid_t pid = -1;
     int pstat;
     struct sigaction ign, intact, quitact;
     sigset_t newsigblock, oldsigblock;

@@ -139,7 +139,7 @@ PruningResult* GetPartitionInfo(PruningResult* result, EState* estate, Relation 
     }
     partitionPruningFromBoundary(&context, resPartition);
     if (PruningResultIsFull(resPartition) ||
-        (resPartition->bm_rangeSelectedPartitions == NULL && PruningResultIsSubset(resPartition))) {
+        (PruningResultIsSubset(resPartition) && resPartition->bm_rangeSelectedPartitions == NULL)) {
         destroyPruningResult(resPartition);
         resPartition = getFullPruningResult(current_relation);
         CollectSubpartitionPruningResults(resPartition, current_relation);

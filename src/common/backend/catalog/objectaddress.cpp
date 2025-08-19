@@ -625,7 +625,7 @@ static ObjectAddress get_object_address_opf_member(ObjectType objtype,
                              List *objname, List *objargs, bool missing_ok);
 static const ObjectPropertyType* get_object_property_data(Oid class_id);
 static ObjectAddress get_object_address_publication_rel(List *objname, List *objargs,
-    Relation *relation, bool missing_ok);
+    Relation* relp, bool missing_ok);
 
 static void getOpFamilyIdentity(StringInfo buffer, Oid opfid, List **objname);
 static void getRelationIdentity(StringInfo buffer, Oid relid, List **object);
@@ -1455,18 +1455,19 @@ static ObjectAddress get_object_address_attribute(
  * Find the ObjectAddress for a publication relation.  The objname parameter
  * is the relation name; objargs contains the publication name.
  */
-static ObjectAddress get_object_address_publication_rel(List *objname, List *objargs, Relation *relation,
+static ObjectAddress get_object_address_publication_rel(List *objname, List *objargs, Relation* relp,
     bool missing_ok)
 {
     ObjectAddress address;
     char *pubname;
+    Relation relation;
     Publication *pub;
 
     address.classId = PublicationRelRelationId;
     address.objectId = InvalidOid;
     address.objectSubId = InvalidOid;
 
-    *relation = relation_openrv_extended(makeRangeVarFromNameList(objname), AccessShareLock, missing_ok);
+    relation = relation_openrv_extended(makeRangeVarFromNameList(objname), AccessShareLock, missing_ok);
     if (!relation)
         return address;
 
@@ -1480,15 +1481,16 @@ static ObjectAddress get_object_address_publication_rel(List *objname, List *obj
 
     /* Find the publication relation mapping in syscache. */
     address.objectId =
-        GetSysCacheOid2(PUBLICATIONRELMAP, ObjectIdGetDatum(RelationGetRelid(*relation)), ObjectIdGetDatum(pub->oid));
+        GetSysCacheOid2(PUBLICATIONRELMAP, ObjectIdGetDatum(RelationGetRelid(relation)), ObjectIdGetDatum(pub->oid));
     if (!OidIsValid(address.objectId)) {
         if (!missing_ok)
             ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
                 errmsg("publication relation \"%s\" in publication \"%s\" does not exist",
-                RelationGetRelationName(*relation), pubname)));
+                RelationGetRelationName(relation), pubname)));
         return address;
     }
 
+    *relp = relation;
     return address;
 }
 

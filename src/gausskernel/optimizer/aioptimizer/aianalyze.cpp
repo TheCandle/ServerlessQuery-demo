@@ -89,7 +89,7 @@ bool StatsModel::create_model(const char *model_name, HyperparameterValues *hype
     bool found = false;
     AboModelCacheEntry *cache = (AboModelCacheEntry *)hash_search(g_instance.abo_cxt.models, (void *)model_name,
         HASH_REMOVE, &found);
-    if (found) {
+    if (found && cache->model) {
         pfree_ext(cache->model->bayesNetModel);
         MemoryContextDelete(cache->model->mcontext);
         pfree_ext(cache->model);

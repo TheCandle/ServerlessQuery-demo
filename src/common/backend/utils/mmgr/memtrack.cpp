@@ -62,7 +62,7 @@ void MemoryTrackingBufToFile(StringInfoData* memoryBuf, const char* type);
 void MemoryTrackingDetailInfo(MemoryContext context, Size reqSize, Size chunkSize, const char* file, int line)
 {
     /* don't update the memory tracking when it is invalid */
-    if (context->session_id > 0 || !t_thrd.mem_cxt.mem_track_mem_cxt)
+    if (context == NULL || context->session_id > 0 || !t_thrd.mem_cxt.mem_track_mem_cxt)
         return;
 
     MemoryTrack track;
@@ -222,7 +222,7 @@ void MemoryTrackingAllocInfo(MemoryContext context, Size size)
     track = set->track;
 
     /* update the peakSpace for this context */
-    if (set->totalSpace > track->peakSpace)
+    if (track && set->totalSpace > track->peakSpace)
         track->peakSpace = set->totalSpace;
 
     while (track) {

@@ -44,10 +44,10 @@ static bool is_stmt_wait_events_enabled()
     if (!ENABLE_STATEMENT_TRACK) {
         return false;
     }
-    if (CURRENT_STMT_METRIC_HANDLE->level < STMT_TRACK_L0) {
+    if (t_thrd.shemem_ptr_cxt.MyBEEntry == NULL) {
         return false;
     }
-    if (t_thrd.shemem_ptr_cxt.MyBEEntry == NULL) {
+    if (CURRENT_STMT_METRIC_HANDLE->level < STMT_TRACK_L0) {
         return false;
     }
     return true;

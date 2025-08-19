@@ -867,6 +867,9 @@ void LocalSysDBCache::SetDatabaseName(const char *db_name)
 
     if (my_database_name[0] == '\0') {
         char *tmp = get_database_name(my_database_id);
+        if (tmp == NULL)
+            ereport(ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED),
+                    errmsg("cache lookup failed for database %u", my_database_id)));
         size_t len = strlen(tmp);
         errno_t rc = memcpy_s(my_database_name, len + 1, tmp, len + 1);
         securec_check(rc, "\0", "\0");

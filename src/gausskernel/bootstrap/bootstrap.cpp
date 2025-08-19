@@ -743,6 +743,11 @@ void InsertOneTuple(Oid objectid)
         t_thrd.bootstrap_cxt.attrtypes,
         t_thrd.bootstrap_cxt.boot_reldesc->rd_tam_ops);
     tuple = (HeapTuple) tableam_tops_form_tuple(tupDesc, values, Nulls);
+    if (tuple == NULL) {
+        pfree(tupDesc);
+        ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Form tuple failed.")));
+        return;
+    }
     if (objectid != (Oid)0)
         HeapTupleSetOid(tuple, objectid);
     pfree(tupDesc); /* just free's tupDesc, not the attrtypes */
