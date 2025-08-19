@@ -345,6 +345,50 @@ ERROR:  cannot cast type timestamp with time zone to varbinary
 LINE 1: SELECT '2023-10-01'::timestamp(0) with time zone::varbinary;
                                                         ^
 CONTEXT:  referenced column: varbinary
+-- test operator
+create table test1(id int,var1 varbinary(10));
+insert into test1 values(1,12);
+select var1+1 as var from test1 where id=1;
+ var 
+-----
+  13
+(1 row)
+
+select * from test1 where var1 <='0x40';
+ id |    var1    
+----+------------
+  1 | 0x0000000c
+(1 row)
+
+select var1 from test1 where var1 between 10 and 128;
+    var1    
+------------
+ 0x0000000c
+(1 row)
+
+select * from test1 where var1<>0;
+ id |    var1    
+----+------------
+  1 | 0x0000000c
+(1 row)
+
+select * from test1 where var1!=0;
+ id |    var1    
+----+------------
+  1 | 0x0000000c
+(1 row)
+
+select var1-1 as var from test1 where var1>'0x123';
+ var 
+-----
+(0 rows)
+
+select var1-1.2 as var from test1 where var1>1.2;
+ var 
+-----
+  11
+(1 row)
+
 -- test cast grammar
 INSERT INTO t3 VALUES (12, CAST('123456789012345678922220' AS varbinary));
 SELECT id, a FROM t3 WHERE id = 12;

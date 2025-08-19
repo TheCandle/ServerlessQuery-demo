@@ -101,6 +101,17 @@ SELECT '2023-10-01'::timestamptz::varbinary; -- error
 SELECT '2023-10-01'::abstime::varbinary; -- error
 SELECT '2023-10-01'::timestamp(0) with time zone::varbinary; -- error
 
+-- test operator
+create table test1(id int,var1 varbinary(10));
+insert into test1 values(1,12);
+select var1+1 as var from test1 where id=1;
+select * from test1 where var1 <='0x40';
+select var1 from test1 where var1 between 10 and 128;
+select * from test1 where var1<>0;
+select * from test1 where var1!=0;
+select var1-1 as var from test1 where var1>'0x123';
+select var1-1.2 as var from test1 where var1>1.2;
+
 -- test cast grammar
 INSERT INTO t3 VALUES (12, CAST('123456789012345678922220' AS varbinary));
 SELECT id, a FROM t3 WHERE id = 12;

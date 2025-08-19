@@ -1781,7 +1781,7 @@ AS '$libdir/shark', 'int2varbinary'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (INT2 AS sys.VARBINARY)
-WITH FUNCTION sys.int2varbinary (INT2, integer, boolean) AS ASSIGNMENT;
+WITH FUNCTION sys.int2varbinary (INT2, integer, boolean) AS IMPLICIT;
 
 CREATE OR REPLACE FUNCTION sys.int4varbinary(INT4, integer, boolean)
 RETURNS sys.VARBINARY
@@ -1789,7 +1789,7 @@ AS '$libdir/shark', 'int4varbinary'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (INT4 AS sys.VARBINARY)
-WITH FUNCTION sys.int4varbinary (INT4, integer, boolean) AS ASSIGNMENT;
+WITH FUNCTION sys.int4varbinary (INT4, integer, boolean) AS IMPLICIT;
 
 CREATE OR REPLACE FUNCTION sys.int8varbinary(INT8, integer, boolean)
 RETURNS sys.VARBINARY
@@ -1797,7 +1797,7 @@ AS '$libdir/shark', 'int8varbinary'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (INT8 AS sys.VARBINARY)
-WITH FUNCTION sys.int8varbinary (INT8, integer, boolean) AS ASSIGNMENT;
+WITH FUNCTION sys.int8varbinary (INT8, integer, boolean) AS IMPLICIT;
 
 CREATE OR REPLACE FUNCTION sys.float4varbinary(REAL, integer, boolean)
 RETURNS sys.VARBINARY
@@ -1813,7 +1813,7 @@ AS '$libdir/shark', 'float8varbinary'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (DOUBLE PRECISION AS sys.VARBINARY)
-WITH FUNCTION sys.float8varbinary (DOUBLE PRECISION, integer, boolean) AS ASSIGNMENT;
+WITH FUNCTION sys.float8varbinary (DOUBLE PRECISION, integer, boolean) AS IMPLICIT;
 
 CREATE OR REPLACE FUNCTION sys.varbinaryint2(sys.VARBINARY)
 RETURNS INT2
@@ -1821,7 +1821,7 @@ AS '$libdir/shark', 'varbinaryint2'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (sys.VARBINARY as INT2)
-WITH FUNCTION sys.varbinaryint2 (sys.VARBINARY) AS ASSIGNMENT;
+WITH FUNCTION sys.varbinaryint2 (sys.VARBINARY) AS IMPLICIT;
 
 CREATE OR REPLACE FUNCTION sys.varbinaryint4(sys.VARBINARY)
 RETURNS INT4
@@ -1829,7 +1829,7 @@ AS '$libdir/shark', 'varbinaryint4'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (sys.VARBINARY as INT4)
-WITH FUNCTION sys.varbinaryint4 (sys.VARBINARY) AS ASSIGNMENT;
+WITH FUNCTION sys.varbinaryint4 (sys.VARBINARY) AS IMPLICIT;
 
 CREATE OR REPLACE FUNCTION sys.varbinaryint8(sys.VARBINARY)
 RETURNS INT8
@@ -1837,7 +1837,7 @@ AS '$libdir/shark', 'varbinaryint8'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE CAST (sys.VARBINARY as INT8)
-WITH FUNCTION sys.varbinaryint8 (sys.VARBINARY) AS ASSIGNMENT;
+WITH FUNCTION sys.varbinaryint8 (sys.VARBINARY) AS IMPLICIT;
 
 -- Add support for varbinary and binary with operators
 -- Support equals
