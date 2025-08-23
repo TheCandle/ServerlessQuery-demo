@@ -124,7 +124,7 @@ static void repair_check_token(char *path, char *token)
     if (token == NULL) {
         ereport(ERROR,
                 (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("invalid input %s.", path)));
+                    errmsg("invalid input %s", path)));
     }
 }
 
@@ -181,8 +181,16 @@ ForkNumber forkname_to_number(char* forkName, BlockNumber* segno, bool isRepair)
                     errmsg("invalid fork name"),
                     errhint("Valid fork names are \"main\", \"fsm\", \"bcm\", and \"vm\".")));
         } else {
+            if (subtoken[0] != 'C') {
+                ereport(ERROR,
+                        (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                         errmsg("invalid fork name")));
+            }
             /* skip 'C' */
             subtoken = subtoken + 1;
+            if (atooid(subtoken)) {
+                return InvalidForkNumber;
+            }
             forkNum = ColumnId2ColForkNum(atooid(subtoken));
             if (segno != NULL)
                 *segno = (BlockNumber)atooid(tmpsubtoken);
@@ -190,6 +198,14 @@ ForkNumber forkname_to_number(char* forkName, BlockNumber* segno, bool isRepair)
             return forkNum;
         }
     } else {
+        if (token[0] != 'C') {
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                     errmsg("invalid fork name")));
+        }
+        if (*token == '\0') {
+            return InvalidForkNumber;
+        }
         /* it is a column data bcm file. C1_bcm */
         /* skip 'C' */
         token = token + 1;
