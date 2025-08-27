@@ -866,6 +866,7 @@ static void arrayconst_cleanup_fn(PredIterInfo info)
 {
     ArrayConstIterState* state = (ArrayConstIterState*)info->state;
 
+    AssertEreport(state != NULL, MOD_OPT, "state is NULL.");
     pfree_ext(state->elem_values);
     pfree_ext(state->elem_nulls);
     list_free_ext(state->opexpr.args);
@@ -921,6 +922,7 @@ static void arrayexpr_cleanup_fn(PredIterInfo info)
 {
     ArrayExprIterState* state = (ArrayExprIterState*)info->state;
 
+    AssertEreport(state != NULL, MOD_OPT, "state is NULL.");
     list_free_ext(state->opexpr.args);
     pfree_ext(state);
 }
