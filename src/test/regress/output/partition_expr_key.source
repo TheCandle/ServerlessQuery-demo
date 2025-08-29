@@ -1299,6 +1299,21 @@ alter table tb1 split partition p4 at(2001) into (partition p5,partition p6);
 NOTICE:  Command without UPDATE GLOBAL INDEX will disable global index
 -- test split expkey partition with updating index
 alter table tb1 split partition p1 at(1000) into (partition p11,partition p12) update global index;
+-- test expr function name
+create table tfunc(abs int primary key, c1 int) partition by range(abs(c1)) (partition p1 values less than(1));
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "tfunc_pkey" for table "tfunc"
+\d tfunc
+     Table "public.tfunc"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ abs    | integer | not null
+ c1     | integer | 
+Indexes:
+    "tfunc_pkey" PRIMARY KEY, btree (abs) TABLESPACE pg_default
+Partition By RANGE(abs(c1))
+Number of partitions: 1 (View pg_partition to check each partition range.)
+
+drop table tfunc;
 \c regression
 drop database if exists part_expr_key_db;
 drop database if exists part_expr_key_db1;

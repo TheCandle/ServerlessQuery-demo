@@ -415,6 +415,11 @@ alter table tb1 split partition p4 at(2001) into (partition p5,partition p6);
 -- test split expkey partition with updating index
 alter table tb1 split partition p1 at(1000) into (partition p11,partition p12) update global index;
 
+-- test expr function name
+create table tfunc(abs int primary key, c1 int) partition by range(abs(c1)) (partition p1 values less than(1));
+\d tfunc
+drop table tfunc;
+
 \c regression
 
 drop database if exists part_expr_key_db;
