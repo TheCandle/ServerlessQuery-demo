@@ -1547,7 +1547,12 @@ static void TransformColumnDefinitionConstraints(CreateStmtContext* cxt, ColumnD
 
             case CONSTR_IDENTITY:
                 {
-                    bool large = typenameTypeId(NULL, column->typname) == NUMERICOID;
+                    bool large = false;
+                    Oid typeOid = typenameTypeId(NULL, column->typname);
+                    if (typeOid == NUMERICOID ||
+                        typeOid == INT8OID) {
+                        large = true;
+                    }
 
                     if (cxt->ofType) {
                         ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

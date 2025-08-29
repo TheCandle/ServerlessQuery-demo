@@ -2414,8 +2414,13 @@ static void ProcessSequenceOptMaxMin(DefElem* elm, T_Form newm, bool isInit, Oid
                 maxDecimalNum = maxDecimalNum * base + maxSigDigit;
             }
             minDecimalNum = maxDecimalNum * (int128)-1 - (int128)1;
-            AssignInt<T_Int, large>(&(newm->max_value), maxDecimalNum);
-            AssignInt<T_Int, large>(&(newm->min_value), minDecimalNum);
+            if (type_id == INT8OID) {
+                AssignInt<T_Int, large>(&(newm->max_value), LARGE_SEQ_MAXVALUE);
+                AssignInt<T_Int, large>(&(newm->min_value), LARGE_SEQ_MINVALUE);
+            } else {
+                AssignInt<T_Int, large>(&(newm->max_value), maxDecimalNum);
+                AssignInt<T_Int, large>(&(newm->min_value), minDecimalNum);
+            }
         } else {
             if (type_id == INT1OID) {
                 AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_8);

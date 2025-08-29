@@ -135,6 +135,13 @@ CREATE TABLE book
 drop table if exists book;
 CREATE TABLE book
 (
+    bookId bigint NOT NULL PRIMARY KEY IDENTITY(-9223372036854775808,1),
+    bookname NVARCHAR(50), 
+    author NVARCHAR(50)
+);
+drop table if exists book;
+CREATE TABLE book
+(
     bookId text NOT NULL PRIMARY KEY IDENTITY, 
     bookname NVARCHAR(50), 
     author NVARCHAR(50)
