@@ -40,6 +40,8 @@ select * from book;
 
 ALTER table book add column id int identity;
 ERROR:  multiple identity specifications for column "bookid" of table "book"
+ALTER table book alter bookId type text;
+ERROR:  Identity column 'bookid' data type invalid.
 drop table if exists book;
 CREATE TABLE book(id int identity, bookId int IDENTITY, bookname NVARCHAR(50), author NVARCHAR(50));
 NOTICE:  CREATE TABLE will create implicit sequence "book_id_seq_identity" for serial column "book.id"

@@ -156,7 +156,7 @@ static void transformColumnType(CreateStmtContext* cxt, ColumnDef* column);
 static void setSchemaName(char* context_schema, char** stmt_schema_name);
 static void TransformTempAutoIncrement(ColumnDef* column, CreateStmt* stmt);
 static int128 TransformAutoIncStart(CreateStmt* stmt);
-static void identity_type_dmod(ColumnDef* column);
+static void identity_type_dmod(ColumnDef* column, char* colname);
 static int identity_only(ColumnDef* column);
 
 /*
@@ -1571,7 +1571,7 @@ static void TransformColumnDefinitionConstraints(CreateStmtContext* cxt, ColumnD
                                        cxt->relation->relname, column->colname),
                                        parser_errposition(cxt->pstate, constraint->location)));
 
-                    identity_type_dmod(column);
+                    identity_type_dmod(column, column->colname);
                     createSeqOwnedByTable(cxt, column, preCheck, large, false, true, constraint->options);
                     sawIdentity = true;
                     column->is_not_null = true;
@@ -5246,6 +5246,10 @@ List* transformAlterTableStmt(Oid relid, AlterTableStmt* stmt, const char* query
                     ReleaseSysCache(tup);
                 }
 
+                if (DB_IS_CMPT(D_FORMAT) &&
+                    OidIsValid(pg_get_serial_sequence_internal(relid, get_attnum(relid, cmd->name), true, NULL))) {
+                    identity_type_dmod(def, cmd->name);
+                }
                 newcmds = lappend(newcmds, cmd);
                 break;
             }
@@ -8732,7 +8736,7 @@ static int identity_only(ColumnDef* column)
  * Get the column type which is constrained by identity in D mode.
  * Check the type is expected or not, and report error for invalid type.
  */
-static void identity_type_dmod(ColumnDef* column)
+static void identity_type_dmod(ColumnDef* column, char* colname)
 {
     int s = 0;
     Oid newtypid = typenameTypeId(NULL, column->typname);
@@ -8752,5 +8756,5 @@ static void identity_type_dmod(ColumnDef* column)
             ereport(ERROR,
                     (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                      errmsg("Identity column '%s' data type invalid.",
-                     column->colname)));
+                     colname)));
 }

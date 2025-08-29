@@ -16,6 +16,7 @@ INSERT INTO book(bookname,author) VALUES('book3','author3'),('book4','author4');
 INSERT INTO book VALUES(3,'book5','author5');
 select * from book;
 ALTER table book add column id int identity;
+ALTER table book alter bookId type text;
 drop table if exists book;
 
 CREATE TABLE book(id int identity, bookId int IDENTITY, bookname NVARCHAR(50), author NVARCHAR(50));
