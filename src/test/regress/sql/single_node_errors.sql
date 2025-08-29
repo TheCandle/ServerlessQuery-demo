@@ -395,3 +395,13 @@ select ('aa'||(1||(2||(3)||(4||(5||(6||(7||(8||(9||(10||
 ('ff'||(1||(2||(3)||(4||(5||(6||(7||(8||(9||(10||
 ('gg'||(1||(2||(3||(4||(5||(6||(7||(8||(9||(10)))))))))))
 ))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
+
+-- Check max_stack_depth valid
+show enable_thread_pool;
+create table csdt1(pkey int, c7 float8, c8 text, c9 float8);
+insert into csdt1(pkey, c7, c8, c9) values(1000, 0.0, '3n@', -79.14);
+update csdt1 set c7 = csdt1.c9/csdt1.c7 where 'a' @@ repeat(csdt1.c8, csdt1.pkey);
+set max_stack_depth = 100;
+--error
+update csdt1 set c7 = csdt1.c9/csdt1.c7 where 'a' @@ repeat(csdt1.c8, csdt1.pkey);
+drop table csdt1;

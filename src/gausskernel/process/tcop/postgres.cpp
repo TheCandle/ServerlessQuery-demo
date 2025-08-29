@@ -7140,7 +7140,7 @@ bool stack_is_too_deep(void)
      * be done first, but putting it here avoids wasting cycles during normal
      * cases.
      */
-    if (stack_depth > t_thrd.postgres_cxt.max_stack_depth_bytes && t_thrd.postgres_cxt.stack_base_ptr != NULL)
+    if (stack_depth > u_sess->attr.attr_common.max_stack_depth_bytes && t_thrd.postgres_cxt.stack_base_ptr != NULL)
         return true;
 
         /*
@@ -7153,7 +7153,7 @@ bool stack_is_too_deep(void)
          */
 #if defined(__ia64__) || defined(__ia64)
     stack_depth = (long)(ia64_get_bsp() - register_stack_base_ptr);
-    if (stack_depth > t_thrd.postgres_cxt.max_stack_depth_bytes && register_stack_base_ptr != NULL)
+    if (stack_depth > u_sess->attr.attr_common.max_stack_depth_bytes && register_stack_base_ptr != NULL)
         return true;
 #endif /* IA64 */
 
@@ -7179,7 +7179,7 @@ void assign_max_stack_depth(int newval, void* extra)
 {
     long newval_bytes = newval * 1024L;
 
-    t_thrd.postgres_cxt.max_stack_depth_bytes = newval_bytes;
+    u_sess->attr.attr_common.max_stack_depth_bytes = newval_bytes;
 }
 
 /*
