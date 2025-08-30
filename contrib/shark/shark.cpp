@@ -3,15 +3,19 @@
 #include "src/backend_parser/scanner.h"
 #include "parser/parser.h"
 #include "parser/scansup.h"
+#include "parser/parsetree.h"
+#include "rewrite/rewriteHandler.h"
 #include "common/int.h"
 #include "commands/extension.h"
 #include "commands/dbcommands.h"
 #include "commands/sequence.h"
+#include "commands/matview.h"
 #include "utils/builtins.h"
 #include "utils/typcache.h"
 #include "utils/numeric.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_authid.h"
+#include "catalog/gs_matview.h"
 #include "shark.h"
 
 PG_MODULE_MAGIC;
@@ -392,7 +396,6 @@ Datum suser_id(PG_FUNCTION_ARGS)
     char* login = nullptr;
     Oid ret = InvalidOid;
     HeapTuple auth_tp = nullptr;
-    Form_pg_authid authid_struct = nullptr;
 
     login = PG_ARGISNULL(0) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(0));
     if (!login) {
@@ -456,6 +459,65 @@ Datum get_scope_identity(PG_FUNCTION_ARGS)
     PG_RETURN_INT128(res);
 }
 
+Oid get_seq_id_from_tle(Query* query, TargetEntry* tle)
+{
+    if (list_length(query->jointree->fromlist) != 1 ||
+        !IsA(linitial(query->jointree->fromlist), RangeTblRef)) {
+        return InvalidOid;
+    }
+
+    if (IsA(tle->expr, Var)) {
+        Var *var = (Var *)tle->expr;
+        RangeTblEntry* rte = rt_fetch(var->varno, query->rtable);
+        Query* sub_query = NULL;
+
+        if (rte->rtekind == RTE_RELATION) {
+            Relation rel = try_relation_open(rte->relid, AccessShareLock);
+            if (rel->rd_rel->relkind == RELKIND_RELATION) {
+                relation_close(rel, AccessShareLock);
+                return pg_get_serial_sequence_internal(rte->relid, var->varattno, true, NULL);
+            } else if (rel->rd_rel->relkind == RELKIND_VIEW) {
+                sub_query = get_view_query(rel);
+            } else if (rel->rd_rel->relkind == RELKIND_MATVIEW) {
+                sub_query = get_matview_query(rel);
+            }
+            relation_close(rel, AccessShareLock);
+        } else if (rte->rtekind == RTE_SUBQUERY) {
+            sub_query = rte->subquery;
+        } else {
+            return InvalidOid;
+        }
+        return get_seq_id_from_tle(sub_query, get_tle_by_resno(sub_query->targetList, var->varattno));
+    }
+    return InvalidOid;
+}
+
+static Oid get_identity_seq_id(Oid tableOid)
+{
+    Relation rel = try_relation_open(tableOid, AccessShareLock);
+    if (rel->rd_rel->relkind != RELKIND_VIEW && rel->rd_rel->relkind != RELKIND_MATVIEW) {
+        relation_close(rel, AccessShareLock);
+        return get_table_identity(tableOid);
+    }
+
+    Query* viewquery = rel->rd_rel->relkind == RELKIND_VIEW ? get_view_query(rel) : get_matview_query(rel);
+    Oid seqOid = InvalidOid;
+
+    ListCell* cell = NULL;
+    foreach (cell, viewquery->targetList) {
+        TargetEntry* tle = (TargetEntry*)lfirst(cell);
+        if (IsA(tle->expr, Var)) {
+            seqOid = get_seq_id_from_tle(viewquery, tle);
+            if (OidIsValid(seqOid)) {
+                break;
+            }
+        }
+    }
+
+    relation_close(rel, AccessShareLock);
+    return seqOid;
+}
+
 PG_FUNCTION_INFO_V1(get_ident_current);
 Datum get_ident_current(PG_FUNCTION_ARGS)
 {
@@ -485,7 +547,7 @@ Datum get_ident_current(PG_FUNCTION_ARGS)
         if (pg_class_aclcheck(tableOid, GetUserId(), ACL_SELECT | ACL_USAGE) != ACLCHECK_OK) {
             PG_RETURN_NULL();
         }
-        seqid = get_table_identity(tableOid);
+        seqid = get_identity_seq_id(tableOid);
 
         seqidSuccess = get_seed(seqid, &start, &res, &success);
     }
@@ -1001,13 +1063,10 @@ static int32 int32_millisec_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fs
 static int32 int32_microsec_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fsec1, fsec_t fsec2, bool *overflow)
 {
     int diff = -1;
-    int32 yeardiff = 0;
-    int32 monthdiff = 0;
     int32 daydiff = 0;
     int32 hourdiff = 0;
     int32 minutediff = 0;
     int32 seconddiff = 0;
-    int32 millisecdiff = 0;
     int32 microsecdiff = 0;
 
     daydiff =
@@ -1027,13 +1086,10 @@ static int32 int32_microsec_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fs
 static int32 int32_nano_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fsec1, fsec_t fsec2, bool *overflow)
 {
     int32 diff = -1;
-    int32 yeardiff = 0;
-    int32 monthdiff = 0;
     int32 daydiff = 0;
     int32 hourdiff = 0;
     int32 minutediff = 0;
     int32 seconddiff = 0;
-    int32 millisecdiff = 0;
     int32 microsecdiff = 0;
 
     daydiff =
@@ -1170,13 +1226,10 @@ static int64 int64_millisec_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fs
 static int64 int64_microsec_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fsec1, fsec_t fsec2, bool *overflow)
 {
     int diff = -1;
-    int64 yeardiff = 0;
-    int64 monthdiff = 0;
     int64 daydiff = 0;
     int64 hourdiff = 0;
     int64 minutediff = 0;
     int64 seconddiff = 0;
-    int64 millisecdiff = 0;
     int64 microsecdiff = 0;
 
     daydiff =
@@ -1196,13 +1249,10 @@ static int64 int64_microsec_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fs
 static int64 int64_nano_diff(struct pg_tm* tm1, struct pg_tm* tm2, fsec_t fsec1, fsec_t fsec2, bool *overflow)
 {
     int64 diff = -1;
-    int64 yeardiff = 0;
-    int64 monthdiff = 0;
     int64 daydiff = 0;
     int64 hourdiff = 0;
     int64 minutediff = 0;
     int64 seconddiff = 0;
-    int64 millisecdiff = 0;
     int64 microsecdiff = 0;
 
     daydiff =

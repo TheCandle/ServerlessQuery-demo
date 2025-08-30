@@ -1359,7 +1359,7 @@ select * from "V_IDENTITY_0001";
 select ident_current('"V_IDENTITY_0001"');
  ident_current 
 ---------------
-              
+             2
 (1 row)
 
 select ident_current('"T_IDENTITY_0001"');
@@ -1655,11 +1655,111 @@ SELECT IDENT_CURRENT('Employees');
 SELECT IDENT_CURRENT('v_Employees');
  ident_current 
 ---------------
+             2
+(1 row)
+
+CREATE TABLE Employees_1 ( EmployeeID INT PRIMARY KEY, FirstName NVARCHAR(50), LastName NVARCHAR(50) );
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "employees_1_pkey" for table "employees_1"
+INSERT INTO Employees_1 (EmployeeID, FirstName, LastName) VALUES (1, 'John', 'Doe');
+SELECT IDENT_CURRENT('Employees_1');
+ ident_current 
+---------------
+              
+(1 row)
+
+-- join
+CREATE VIEW v_Employees_1 AS SELECT a.EmployeeID FROM Employees a join Employees b on a.EmployeeID = b.EmployeeID;
+SELECT IDENT_CURRENT('v_Employees_1');
+ ident_current 
+---------------
+              
+(1 row)
+
+-- have no identity
+CREATE VIEW v_Employees_2 AS SELECT FirstName, LastName FROM Employees; 
+SELECT IDENT_CURRENT('v_Employees_2');
+ ident_current 
+---------------
+              
+(1 row)
+
+-- identity col has alias
+create view  v_Employees2 AS SELECT EmployeeID as id,  FirstName, LastName FROM Employees;
+SELECT IDENT_CURRENT('v_Employees2');
+ ident_current 
+---------------
+             2
+(1 row)
+
+-- oper on identity col
+create view  v_Employees3 AS SELECT EmployeeID + 2 as id,  FirstName, LastName FROM Employees;
+SELECT IDENT_CURRENT('v_Employees3');
+ ident_current 
+---------------
+              
+(1 row)
+
+create view  v_Employees4 AS SELECT sum(EmployeeID) as sum FROM Employees;
+SELECT IDENT_CURRENT('v_Employees4');
+ ident_current 
+---------------
+              
+(1 row)
+
+-- materialized view
+create materialized view  v_Employees5 AS SELECT EmployeeID,  FirstName, LastName FROM Employees;
+SELECT IDENT_CURRENT('v_Employees5');
+ ident_current 
+---------------
+             2
+(1 row)
+
+-- view on view with identity col
+create view  v_Employees6 AS SELECT * from v_Employees ;
+SELECT IDENT_CURRENT('v_Employees6');
+ ident_current 
+---------------
+             2
+(1 row)
+
+-- identity col on WHERE
+create view  v_Employees7 AS SELECT FirstName, LastName FROM Employees where EmployeeID = 1;
+SELECT IDENT_CURRENT('v_Employees7');
+ ident_current 
+---------------
+              
+(1 row)
+
+-- view on view with join
+create view  v_Employees8 AS SELECT EmployeeID FROM v_Employees_1;
+SELECT IDENT_CURRENT('v_Employees8');
+ ident_current 
+---------------
+              
+(1 row)
+
+-- view on view with identity col, but don't care identity col
+create view  v_Employees9 AS SELECT FirstName from v_Employees ;
+SELECT IDENT_CURRENT('v_Employees9');
+ ident_current 
+---------------
               
 (1 row)
 
 drop table Employees cascade;
-NOTICE:  drop cascades to view v_employees
+NOTICE:  drop cascades to 11 other objects
+DETAIL:  drop cascades to view v_employees_2
+drop cascades to view v_employees
+drop cascades to view v_employees9
+drop cascades to view v_employees6
+drop cascades to view v_employees_1
+drop cascades to view v_employees8
+drop cascades to view v_employees2
+drop cascades to view v_employees3
+drop cascades to view v_employees4
+drop cascades to materialized view v_employees5
+drop cascades to view v_employees7
+drop table Employees_1 cascade;
 reset search_path;
 drop schema test_ident_current;
 drop schema functions_test cascade;

@@ -641,7 +641,51 @@ select * from Employees;
 select * from v_Employees;
 SELECT IDENT_CURRENT('Employees');
 SELECT IDENT_CURRENT('v_Employees');
+
+CREATE TABLE Employees_1 ( EmployeeID INT PRIMARY KEY, FirstName NVARCHAR(50), LastName NVARCHAR(50) );
+INSERT INTO Employees_1 (EmployeeID, FirstName, LastName) VALUES (1, 'John', 'Doe');
+SELECT IDENT_CURRENT('Employees_1');
+
+-- join
+CREATE VIEW v_Employees_1 AS SELECT a.EmployeeID FROM Employees a join Employees b on a.EmployeeID = b.EmployeeID;
+SELECT IDENT_CURRENT('v_Employees_1');
+
+-- have no identity
+CREATE VIEW v_Employees_2 AS SELECT FirstName, LastName FROM Employees; 
+SELECT IDENT_CURRENT('v_Employees_2');
+
+-- identity col has alias
+create view  v_Employees2 AS SELECT EmployeeID as id,  FirstName, LastName FROM Employees;
+SELECT IDENT_CURRENT('v_Employees2');
+
+-- oper on identity col
+create view  v_Employees3 AS SELECT EmployeeID + 2 as id,  FirstName, LastName FROM Employees;
+SELECT IDENT_CURRENT('v_Employees3');
+create view  v_Employees4 AS SELECT sum(EmployeeID) as sum FROM Employees;
+SELECT IDENT_CURRENT('v_Employees4');
+
+-- materialized view
+create materialized view  v_Employees5 AS SELECT EmployeeID,  FirstName, LastName FROM Employees;
+SELECT IDENT_CURRENT('v_Employees5');
+
+-- view on view with identity col
+create view  v_Employees6 AS SELECT * from v_Employees ;
+SELECT IDENT_CURRENT('v_Employees6');
+
+-- identity col on WHERE
+create view  v_Employees7 AS SELECT FirstName, LastName FROM Employees where EmployeeID = 1;
+SELECT IDENT_CURRENT('v_Employees7');
+
+-- view on view with join
+create view  v_Employees8 AS SELECT EmployeeID FROM v_Employees_1;
+SELECT IDENT_CURRENT('v_Employees8');
+
+-- view on view with identity col, but don't care identity col
+create view  v_Employees9 AS SELECT FirstName from v_Employees ;
+SELECT IDENT_CURRENT('v_Employees9');
+
 drop table Employees cascade;
+drop table Employees_1 cascade;
 
 reset search_path;
 drop schema test_ident_current;
