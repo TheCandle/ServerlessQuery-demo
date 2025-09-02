@@ -1108,6 +1108,12 @@ bool SSNeedTerminateRequestPageInReform(dms_buf_ctrl_t *buf_ctrl)
     if ((AmPageRedoProcess() || AmStartupProcess()) && dms_reform_failed()) {
         return true;
     }
+
+    if (AmDmsProcess() && !dms_drc_accessible((uint8)DRC_RES_PAGE_TYPE) &&
+        t_thrd.dms_cxt.in_ondemand_redo) {
+        return true;
+    }
+
     return false;
 }
 
