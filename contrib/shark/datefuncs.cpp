@@ -179,11 +179,12 @@ static void InitIntervalHash(void)
     ctl.keysize   = INTERVAL_KEY_SIZE;
     ctl.entrysize = sizeof(IntervalKey);
     ctl.hash      = string_hash;
+    ctl.hcxt = INSTANCE_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_EXECUTOR);
 
     IntervalHash = hash_create("IntervalKeywordHash",
                                INTERVAL_NUM,
                                &ctl,
-                               HASH_ELEM | HASH_FUNCTION);
+                               HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 }
 
 static void PopulateHash(void)
@@ -225,6 +226,9 @@ void GetIntervalTypeDateMs(char* args, const int inter, DataInfo *info, int* int
     info->year = 0;
     *intervalType = -1;
 
+    if (!IntervalHash) {
+        InitIntervalLookup();
+    }
     const IntervalEntry *m = FindInterval(arg);
     if (!m) {
         ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
