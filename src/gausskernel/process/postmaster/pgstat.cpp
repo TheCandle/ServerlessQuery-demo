@@ -6911,8 +6911,10 @@ static void pgstat_recv_tabstat(PgStat_MsgTabstat* msg, int len)
                 tabentry->n_live_tuples = 0;
                 tabentry->n_dead_tuples = 0;
             }
-            tabentry->n_live_tuples += tabmsg->t_counts.t_delta_live_tuples;
-            tabentry->n_dead_tuples += tabmsg->t_counts.t_delta_dead_tuples;
+            if (tabentry->analyze_timestamp == 0 || tabentry->analyze_timestamp < tabentry->data_changed_timestamp) {
+                tabentry->n_live_tuples += tabmsg->t_counts.t_delta_live_tuples;
+                tabentry->n_dead_tuples += tabmsg->t_counts.t_delta_dead_tuples;
+            }
             tabentry->changes_since_analyze += tabmsg->t_counts.t_changed_tuples;
             tabentry->blocks_fetched += tabmsg->t_counts.t_blocks_fetched;
             tabentry->blocks_hit += tabmsg->t_counts.t_blocks_hit;
@@ -6995,8 +6997,10 @@ static void pgstat_recv_tabstat(PgStat_MsgTabstat* msg, int len)
             tabentry->tuples_deleted += tabmsg->t_counts.t_tuples_deleted;
             tabentry->tuples_hot_updated += tabmsg->t_counts.t_tuples_hot_updated;
             tabentry->tuples_inplace_updated += tabmsg->t_counts.t_tuples_inplace_updated;
-            tabentry->n_live_tuples += tabmsg->t_counts.t_delta_live_tuples;
-            tabentry->n_dead_tuples += tabmsg->t_counts.t_delta_dead_tuples;
+            if (tabentry->analyze_timestamp == 0 || tabentry->analyze_timestamp < tabentry->data_changed_timestamp) {
+                tabentry->n_live_tuples += tabmsg->t_counts.t_delta_live_tuples;
+                tabentry->n_dead_tuples += tabmsg->t_counts.t_delta_dead_tuples;
+            }
             tabentry->changes_since_analyze += tabmsg->t_counts.t_changed_tuples;
             tabentry->blocks_fetched += tabmsg->t_counts.t_blocks_fetched;
             tabentry->blocks_hit += tabmsg->t_counts.t_blocks_hit;
