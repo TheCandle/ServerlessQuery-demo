@@ -90,6 +90,7 @@ typedef enum {
     CMKEM_REMOVE_FILE_ERR,
     /* memory */
     CMKEM_MALLOC_MEM_ERR,
+    CMKEM_NULL_PTR_ERR,
     CMKEM_CHECK_BUF_LEN_ERR,
     /* cjson */
     CMKEM_CJSON_PARSE_ERR,
