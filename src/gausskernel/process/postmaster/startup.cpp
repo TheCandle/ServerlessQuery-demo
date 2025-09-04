@@ -282,7 +282,7 @@ static void StartupReleaseAllLocks(int code, Datum arg)
 
 void DeleteDisConnFileInClusterStandby()
 {
-    if (!(IS_SHARED_STORAGE_MODE || SS_DORADO_CLUSTER)) {
+    if ((IS_SHARED_STORAGE_MODE || SS_DORADO_CLUSTER)) {
         return;
     }
 

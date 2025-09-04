@@ -202,9 +202,9 @@ static void SetWalRcvConninfo(ReplConnTarget conn_target)
     SpinLockRelease(&hashmdata->mutex);
 
     if (prev_index > 0 && (GetConnectErrorCont(prev_index) < MAX_CONNECT_ERROR_COUNT) &&
-        IS_CN_DISASTER_RECOVER_MODE) {
+        IS_CN_DISASTER_RECOVER_MODE || AM_HADR_WAL_RECEIVER) {
         t_thrd.walreceiverfuncs_cxt.WalReplIndex = prev_index;
-        ereport(LOG, (errmsg(" SetWalRcvConninfo reuse connection %d.", prev_index)));
+        ereport(LOG, (errmsg("walecvconninfo reuse connection %d.", prev_index)));
         pg_usleep(200000L);
     }
 
@@ -228,6 +228,7 @@ static void SetWalRcvConninfo(ReplConnTarget conn_target)
             connNode.disable_conn_node_port == conninfo->remoteport) {
             useIndex = t_thrd.walreceiverfuncs_cxt.WalReplIndex;
             t_thrd.walreceiverfuncs_cxt.WalReplIndex++;
+            ereport(DEBUG2, (errmsg("current useIndex is: %d", useIndex)));
             break;
         }
 

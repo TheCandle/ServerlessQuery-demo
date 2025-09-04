@@ -367,6 +367,15 @@ void RefuseConnect()
         return;
     }
 
+    /*
+     * primary-standby mode: disconn_node.disable_conn_node_host is primary when SPECIFY_CONNECTION. For standby,
+     * remotehost is primary, so disable_conn_node_host == remotehost. For primary, it have no walrec thread, so
+     * do not reach this function.
+     * main standby-cascade stanby: disconn_node.disable_conn_node_host is main standby when SPECIFY_CONNECTION.
+     * For cascade stanby, remotehost is main standby, so disable_conn_node_host == remotehost. For main stanby,
+     * remotehost is primary in primary cluster and disable_conn_node_host is mainstanby, so when conn_mode is set
+     * disaster cluster to SPECIFY_CONNECTION, it will reach FATAL.
+     */
     if (disconn_node.conn_mode == SPECIFY_CONNECTION &&
         strcmp(disconn_node.disable_conn_node_host, (char *)walrcv->conn_channel.remotehost) == 0 &&
         disconn_node.disable_conn_node_port == walrcv->conn_channel.remoteport) {
@@ -693,12 +702,13 @@ void WalReceiverMain(void)
             SpinLockAcquire(&hashmdata->mutex);
             int walreplindex = hashmdata->current_repl;
             SpinLockRelease(&hashmdata->mutex);
-
             if (!IS_SHARED_STORAGE_STANDBY_CLUSTER_STANDBY_MODE && !SS_DISASTER_MAIN_STANDBY_NODE) {
                 replConnInfo = t_thrd.postmaster_cxt.ReplConnArray[walreplindex];
             } else if (walreplindex >= MAX_REPLNODE_NUM) {
                 replConnInfo = t_thrd.postmaster_cxt.CrossClusterReplConnArray[walreplindex - MAX_REPLNODE_NUM];
             }
+
+            ereport(LOG, (errmsg("current walreplindex is: %d", walreplindex)));
             if (replConnInfo)
                 channel_identifier = replConnInfo->localport;
         }

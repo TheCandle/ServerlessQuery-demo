@@ -17509,6 +17509,7 @@ retry:
                         ShutdownDataRcv();
 
                         if (t_thrd.xlog_cxt.is_cascade_standby) {
+                            ereport(LOG, (errmsg("cascade standby start to handle promoting from readxlog")));
                             HandleCascadeStandbyPromote(fetching_ckpt ? &t_thrd.xlog_cxt.RedoStartLSN : &targetRecPtr);
                             continue;
                         } else {
@@ -17766,7 +17767,6 @@ retry:
                             SpinLockAcquire(&walrcv->mutex);
                             walrcv->receivedUpto = 0;
                             SpinLockRelease(&walrcv->mutex);
-
                             RequestXLogStreaming(fetching_ckpt ? &t_thrd.xlog_cxt.RedoStartLSN : &targetRecPtr,
                                                  t_thrd.xlog_cxt.PrimaryConnInfo, REPCONNTARGET_PRIMARY,
                                                  u_sess->attr.attr_storage.PrimarySlotName);
