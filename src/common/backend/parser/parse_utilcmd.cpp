@@ -5528,6 +5528,15 @@ static void transformColumnType(CreateStmtContext* cxt, ColumnDef* column)
      * including any collation spec that might be present.
      */
     Type ctype = typenameType(cxt->pstate, column->typname, NULL);
+
+    /*
+     * default typmod for varbinary is 1
+     */
+    if (TSQL_HAS_VARBINARY && typeTypeId(ctype)==TSQL_VARBINARY_OID &&
+        column->typname && !column->typname->typmods) {
+        column->typname->typmods = list_make1(makeAConst(makeInteger(1), -1));
+    }
+
     Form_pg_type typtup = (Form_pg_type)GETSTRUCT(ctype);
 
     if (typtup->typtype == TYPTYPE_SET) {

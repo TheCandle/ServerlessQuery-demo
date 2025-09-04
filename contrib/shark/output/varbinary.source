@@ -21,6 +21,7 @@ ERROR:  length for type varbinary cannot exceed 8000
 LINE 1: CREATE TABLE t7 (id int, a VARBINARY(8001));
                                    ^
 CREATE TABLE t8 (id int, a VARBINARY(8000));
+CREATE TABLE t9 (id int, a VARBINARY);
 CREATE INDEX idx1 ON t1(a);
 CREATE INDEX idx2 ON t2(a);
 CREATE INDEX idx3 ON t3(a);
@@ -37,6 +38,10 @@ ERROR:  String or binary data would be truncated.
 The statement has been terminated.
 CONTEXT:  referenced column: a
 INSERT INTO t3 VALUES (4, '12345678901234567890'::varbinary);
+INSERT INTO t9 VALUES (1, 'aaaaaa');
+ERROR:  String or binary data would be truncated.
+The statement has been terminated.
+CONTEXT:  referenced column: a
 -- test hex
 INSERT INTO t1 VALUES (10, 0xff);
 INSERT INTO t1 VALUES (10, 0xff1); -- error
@@ -599,11 +604,11 @@ select * from test_varbinary.public.t3;
 
 \c restore_varbinary
 \d restore_varbinary.public.t3
-       Table "public.t3"
- Column |   Type    | Modifiers 
---------+-----------+-----------
- id     | integer   | 
- a      | varbinary | 
+         Table "public.t3"
+ Column |     Type     | Modifiers 
+--------+--------------+-----------
+ id     | integer      | 
+ a      | varbinary(1) | 
 Indexes:
     "idx3" btree (a) TABLESPACE pg_default
     "t_var_idx" btree (a) TABLESPACE pg_default
