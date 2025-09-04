@@ -90,6 +90,7 @@ static SPIPlanPtr _SPI_save_plan(SPIPlanPtr plan);
 
 static MemoryContext _SPI_execmem(void);
 static MemoryContext _SPI_procmem(void);
+static MemoryContext _SPI_tuptable_mem(void);
 static bool _SPI_checktuples(void);
 extern void ClearVacuumStmt(VacuumStmt *stmt);
 static void CopySPI_Plan(SPIPlanPtr newplan, SPIPlanPtr plan, MemoryContext plancxt);
@@ -152,12 +153,14 @@ int SPI_connect_ext(CommandDest dest, void (*spiCallbackfn)(void *), void *clien
     u_sess->SPI_cxt._connected++;
     Assert(u_sess->SPI_cxt._connected >= 0 && u_sess->SPI_cxt._connected < u_sess->SPI_cxt._stack_depth);
 
+    MemoryContext tuptable_cxt = u_sess->SPI_cxt._connected == 0 ? NULL : u_sess->SPI_cxt._current->tuptable_cxt;
     u_sess->SPI_cxt._current = &(u_sess->SPI_cxt._stack[u_sess->SPI_cxt._connected]);
     u_sess->SPI_cxt._current->processed = 0;
     u_sess->SPI_cxt._current->lastoid = InvalidOid;
     u_sess->SPI_cxt._current->tuptable = NULL;
     u_sess->SPI_cxt._current->procCxt = NULL; /* in case we fail to create 'em */
     u_sess->SPI_cxt._current->execCxt = NULL;
+    u_sess->SPI_cxt._current->tuptable_cxt = tuptable_cxt;
     u_sess->SPI_cxt._current->connectSubid = GetCurrentSubTransactionId();
     u_sess->SPI_cxt._current->dest = dest;
     u_sess->SPI_cxt._current->spiCallback = (void (*)(void *))spiCallbackfn;
@@ -219,6 +222,8 @@ int SPI_finish(void)
     u_sess->SPI_cxt._current->execCxt = NULL;
     MemoryContextDelete(u_sess->SPI_cxt._current->procCxt);
     u_sess->SPI_cxt._current->procCxt = NULL;
+
+    u_sess->SPI_cxt._current->tuptable_cxt = NULL;
 
     /*
      * Reset result variables, especially SPI_tuptable which is probably
@@ -558,6 +563,14 @@ void SPI_disconnect(int connect)
          * are not done still. We ignore them here, and they will be freed along with top
          * transaction's termination or portal drop. Any idea to free it in advance?
          */
+        if (u_sess->SPI_cxt._connected > 0) {
+            if (u_sess->SPI_cxt._current->execCxt != NULL) {
+                MemoryContextDelete(u_sess->SPI_cxt._current->execCxt);
+            }
+            if (u_sess->SPI_cxt._current->procCxt != NULL) {
+                MemoryContextDelete(u_sess->SPI_cxt._current->procCxt);
+            }
+        }
         u_sess->SPI_cxt._current->execCxt = NULL;
         u_sess->SPI_cxt._current->procCxt = NULL;
 
@@ -661,6 +674,7 @@ void AtEOSubXact_SPI(bool isCommit, SubTransactionId mySubid, bool STP_rollback,
         if (connection->procCxt && need_free_context) {
             MemoryContextDelete(connection->procCxt);
             connection->procCxt = NULL;
+            connection->tuptable_cxt = NULL;
         }
 
         /* Recover timestamp */
@@ -2200,7 +2214,7 @@ void spi_dest_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
             (errcode(ERRORCODE_SPI_IMPROPER_CALL), errmsg("SPI tupletable is not cleaned when initializing SPI.")));
     }
 
-    old_ctx = _SPI_procmem(); /* switch to procedure memory context */
+    old_ctx = _SPI_tuptable_mem(); /* switch to procedure memory context */
 
     tup_tab_cxt = AllocSetContextCreate(CurrentMemoryContext, "SPI TupTable", ALLOCSET_DEFAULT_MINSIZE,
         ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE);
@@ -3469,6 +3483,16 @@ static MemoryContext _SPI_execmem(void)
 static MemoryContext _SPI_procmem(void)
 {
     return MemoryContextSwitchTo(u_sess->SPI_cxt._current->procCxt);
+}
+
+static MemoryContext _SPI_tuptable_mem(void)
+{
+    if (u_sess->SPI_cxt._current->tuptable_cxt != NULL) {
+        /* switch to exception tuptable mem ctx */
+        return MemoryContextSwitchTo(u_sess->SPI_cxt._current->tuptable_cxt);
+    } else {
+        return MemoryContextSwitchTo(u_sess->SPI_cxt._current->procCxt);
+    }
 }
 
 /*
