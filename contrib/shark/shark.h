@@ -50,6 +50,7 @@ typedef struct SharkContext {
     Oid procid;
     ScopeIdentityStack *lastUsedScopeSeqIdentity;
     int pltsqlScopeIdentityNestLevel;
+    Oid varbinaryOid; /* oid of sys.varbinary */
 } sharkContext;
 
 SharkContext* GetSessionContext();

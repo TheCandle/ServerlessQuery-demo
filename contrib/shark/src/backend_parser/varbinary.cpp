@@ -171,8 +171,7 @@ Datum varbinaryin(PG_FUNCTION_ARGS)
     /*
      * Assume that input string is already hex encoded for following cases:
      * 1. Typmode is TSQL_HEX_CONST_TYPMOD
-     * 2. dump_restore GUC is set.
-     * 3. This is logical replication applyworker.
+     * 2. This is logical replication applyworker.
      */
     if (typmod == TSQL_HEX_CONST_TYPMOD || IsLogicalWorker()) {
         /*

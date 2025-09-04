@@ -2468,6 +2468,9 @@ static void _outConst(StringInfo str, Const* node)
          */
         if (type_is_set(node->consttype)) {
             _outDatum(str, node->constvalue, node->constlen, node->constbyval);
+        } else if (TSQL_HAS_VARBINARY &&
+                   (node->consttype == TSQL_VARBINARY_OID)) {
+            _outDatum(str, node->constvalue, node->constlen, node->constbyval);
         } else {
             /*
              * For user-define type

@@ -452,11 +452,11 @@ select * from t2 ORDER BY a;
 create index t_var_idx on t3(a);
 CREATE INDEX t_var_idx_char ON t3(cast(a as varchar(50)));
 explain select /*+ IndexScan(t3 t_var_idx) */ id, a from t3 where a = '12345678901234567890'::varbinary;
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  [Bypass]
  Index Scan using t_var_idx on t3  (cost=0.00..8.27 rows=1 width=36)
-   Index Cond: (a = '0x3132333435363738393031323334353637383930'::varbinary)
+   Index Cond: (a = 0x3132333435363738393031323334353637383930::varbinary)
 (3 rows)
 
 explain select /*+ IndexScan(t3 t_var_idx_char) */ id, a from t3 where a::varchar(50) = 'aa';
@@ -525,6 +525,48 @@ select * from test_varbinary.public.t3 order by id;
 (5 rows)
 
 reset bytea_output;
+-- test out and read
+create view v1 as select 0x123456;
+select * from v1;
+ ?column? 
+----------
+ 0x123456
+(1 row)
+
+\d+ v1;
+                     View "public.v1"
+  Column  |   Type    | Modifiers | Storage  | Description 
+----------+-----------+-----------+----------+-------------
+ ?column? | varbinary |           | extended | 
+View definition:
+ SELECT 0x123456::varbinary AS "?column?";
+
+create unlogged table test1(id int,var1 varbinary(10),var2 varbinary(20)default '0x161616' );
+\d+ test1
+                                     Unlogged table "public.test1"
+ Column |     Type      |               Modifiers               | Storage  | Stats target | Description 
+--------+---------------+---------------------------------------+----------+--------------+-------------
+ id     | integer       |                                       | plain    |              | 
+ var1   | varbinary(10) |                                       | extended |              | 
+ var2   | varbinary(20) | default 0x3078313631363136::varbinary | extended |              | 
+Has OIDs: no
+Options: orientation=row, compression=no
+
+insert into test1 (id, var1) VALUES (1, 0x123456);
+select id,var1,var2::varchar from test1;
+ id |   var1   |   var2   
+----+----------+----------
+  1 | 0x123456 | 0x161616
+(1 row)
+
+create unlogged table test2(id int,var1 varbinary(10),var2 varbinary(20)default 0x161616 );
+insert into test2 (id, var1) VALUES (1, 0x123456);
+select id,var1,var2 from test2;
+ id |   var1   |   var2   
+----+----------+----------
+  1 | 0x123456 | 0x161616
+(1 row)
+
 -- test dump
 create DATABASE restore_varbinary DBCOMPATIBILITY 'D';
 \c restore_varbinary

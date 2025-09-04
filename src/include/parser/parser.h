@@ -49,11 +49,16 @@ extern Oid get_func_oid(const char* funcname, Oid funcnamespace, Expr* expr);
 /* Hooks for sharks */
 typedef List* (*RewriteTypmodExprHookType) (List *exprList);
 typedef bool (*CheckIsMssqlHexHookType) (char *str);
+typedef Oid (*GetVarbinaryOidHookType) ();
 
 
 /* define for varbinary */
 #define TSQL_MAX_TYPMOD (-8000)
 #define TSQL_MAX_NUM_PRECISION 38
 #define TSQL_HEX_CONST_TYPMOD (-16)
+#define TSQL_HAS_VARBINARY \
+     u_sess ->attr.attr_sql.shark && u_sess->hook_cxt.getVarbinaryOidHook != NULL&& \
+    ((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))() != InvalidOid
+#define TSQL_VARBINARY_OID (((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))())
 
 #endif /* PARSER_H */

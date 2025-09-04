@@ -33,10 +33,8 @@
 #include "utils/varbit.h"
 
 static void pcb_error_callback(void* arg);
-static Oid lookup_varbinary_oid();
 static Oid lookup_varbinaryin_funcoid();
 
-static Oid varbinary_oid = InvalidOid;
 static PGFunction varbinaryin_funcaddr = NULL;
 
 /*
@@ -195,65 +193,6 @@ static void pcb_error_callback(void* arg)
     if (geterrcode() != ERRCODE_QUERY_CANCELED) {
         (void)parser_errposition(pcbstate->pstate, pcbstate->location);
     }
-}
-
-/*
- * Get Oid of sys.varbinary from pg_catalog.pg_type.
- * Return InvalidOid if it doesn't exist.
- */
-static Oid lookup_varbinary_oid()
-{
-    int rc;
-    bool snapshot_set;
-    char *query;
-    TupleDesc tupdesc;
-    HeapTuple row;
-    bool isnull;
-    Oid varbinary_oid;
-
-    /*
-     * Some statement type (i.e. CallStmt) does not captrue the active snapshot.
-     * (please see (analyze_requires_snapshot().) It may cause a crash while
-     * excuting a varbinary oid lookup query internally via SPI_execute().
-     * If there is no active snapshot, captrue it.
-     */
-    snapshot_set = false;
-    if (!ActiveSnapshotSet()) {
-        PushActiveSnapshot(GetTransactionSnapshot());
-        snapshot_set = true;
-    }
-
-    /* Connect to the SPI manager */
-    if ((rc = SPI_connect()) < 0)
-        elog(ERROR, "SPI_connect() failed in Parse Analyzer "
-                    "with return code %d", rc);
-
-    query = "SELECT T.oid FROM pg_catalog.pg_type T "
-            "JOIN pg_catalog.pg_namespace N ON N.oid = T.typnamespace "
-            "WHERE N.nspname = 'sys' AND T.typname = 'varbinary'";
-    rc = SPI_execute(query, true, 0);
-    if (rc != SPI_OK_SELECT)
-        elog(ERROR, "SPI_execute() failed in Parse Analyzer "
-                    "with return code %d", rc);
-
-    Assert(SPI_processed <= 1);
-    if (SPI_processed == 1) {
-        tupdesc = SPI_tuptable->tupdesc;
-        row = SPI_tuptable->vals[0];
-        varbinary_oid = DatumGetObjectId(SPI_getbinval(row, tupdesc, 1, &isnull));
-    } else {
-        /* sys.varbinary does not exist in pg_type catalog */
-        varbinary_oid = InvalidOid;
-    }
-
-    /* Cleanup and done */
-    SPI_finish();
-
-    if (snapshot_set) {
-        PopActiveSnapshot();
-    }
-
-    return varbinary_oid;
 }
 
 /*
@@ -587,6 +526,7 @@ Const* make_const(ParseState* pstate, Value* value, int location)
     Oid collid = InvalidOid;
     int typelen;
     bool typebyval = false;
+    Oid varbinary_oid = InvalidOid;
     ParseCallbackState pcbstate;
 
     switch (nodeTag(value)) {
@@ -662,12 +602,13 @@ Const* make_const(ParseState* pstate, Value* value, int location)
         /* Unquoted hex input such as 0x1F, process it as type sys.VARBINARY */
         case T_TSQL_HexString:
             /* Lookup Oid of type sys.varbinary and the input function sys.varbinaryin */
-            if (varbinary_oid == InvalidOid) {
-                if ((varbinary_oid = lookup_varbinary_oid()) != InvalidOid) {
-                    Oid varbinaryin_funcoid = lookup_varbinaryin_funcoid();
-                    varbinaryin_funcaddr =
-                            lookup_C_func_by_oid(varbinaryin_funcoid, "$libdir/shark", "varbinaryin");
-                }
+            if (TSQL_HAS_VARBINARY) {
+                varbinary_oid = ((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))();
+            }
+            if (varbinary_oid != InvalidOid) {
+                Oid varbinaryin_funcoid = lookup_varbinaryin_funcoid();
+                varbinaryin_funcaddr =
+                        lookup_C_func_by_oid(varbinaryin_funcoid, "$libdir/shark", "varbinaryin");
             }
 
             if (varbinary_oid == InvalidOid || varbinaryin_funcaddr == NULL) {

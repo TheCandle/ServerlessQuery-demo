@@ -10887,6 +10887,11 @@ static void get_rule_expr(Node* node, deparse_context* context, bool showimplici
             }
         } break;
 
+        case T_TSQL_HexString: {
+            Value* value = (Value*)node;
+            appendStringInfo(buf, "%s", value->val.str);
+        } break;
+
 #ifdef USE_SPQ
         case T_DMLActionExpr:
             appendStringInfo(buf, "DMLAction");
@@ -11598,6 +11603,13 @@ static void get_const_expr(Const* constval, deparse_context* context, int showty
             break;
 
         default:
+            if (u_sess->attr.attr_sql.shark && u_sess->hook_cxt.getVarbinaryOidHook != NULL &&
+                ((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))() != InvalidOid &&
+                constval->consttype == ((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))()) {
+                appendStringInfo(buf, "%s", extval);
+                break;
+            }
+
             int src_encoding = get_valid_charset_by_collation(constval->constcollid);
             char* converted_str = (src_encoding != GetDatabaseEncoding()) ?
                 pg_any_to_server(extval, strlen(extval), src_encoding) : extval;
