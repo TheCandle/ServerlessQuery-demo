@@ -125,10 +125,10 @@ select * from t2 ORDER BY a;
 
 --test index
 create index t_var_idx on t3(a);
-CREATE INDEX t_var_idx_char ON t3(cast(a as varchar));
+CREATE INDEX t_var_idx_char ON t3(cast(a as varchar(50)));
 
 explain select /*+ IndexScan(t3 t_var_idx) */ id, a from t3 where a = '12345678901234567890'::varbinary;
-explain select /*+ IndexScan(t3 t_var_idx_char) */ id, a from t3 where a::varchar = 'aa';
+explain select /*+ IndexScan(t3 t_var_idx_char) */ id, a from t3 where a::varchar(50) = 'aa';
 
 -- test partition, error varbinary cannot be partition key in sqlserver
 CREATE TABLE t_part (id int, a VARBINARY(16)) PARTITION BY RANGE(a)

@@ -12,3 +12,4 @@ static Node* TsqlFunctionTryCast(Node* arg, TypeName* typname, int location);
 static Node* TsqlFunctionConvert(TypeName* typname, Node* arg, Node* style, bool is_try, int location);
 static Node* DoTypeCast(TypeName* typname, bool is_try, Node* arg, List* args, int location);
 static bool is_qualifed_char_type(char* typename_string);
+static void add_default_typmod(TypeName* typname);

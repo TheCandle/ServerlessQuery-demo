@@ -858,7 +858,8 @@ unreserved_keyword:
 			| TSQL_NANOSECOND ;
 
 reserved_keyword:
-			TSQL_TRY_CAST
+			TSQL_CAST
+			| TSQL_TRY_CAST
 			| TSQL_TRY_CONVERT
 			| TSQL_CONVERT
 			| TSQL_DATEDIFF
@@ -1448,22 +1449,27 @@ func_expr_common_subexpr:
 				}
 			| TSQL_TRY_CAST '(' a_expr AS Typename ')'
 				{
+					add_default_typmod($5);
 					$$ = TsqlFunctionTryCast($3, $5, @1);
 				}
 			| TSQL_CONVERT '(' Typename ',' a_expr ')'
 				{
+					add_default_typmod($3);
 					$$ = TsqlFunctionConvert($3, $5, NULL, false, @1);
 				}
 			| TSQL_CONVERT '(' Typename ',' a_expr ',' a_expr ')'
 				{
+					add_default_typmod($3);
 					$$ = TsqlFunctionConvert($3, $5, $7, false, @1);
 				}
 			| TSQL_TRY_CONVERT '(' Typename ',' a_expr ')'
 				{
+					add_default_typmod($3);
 					$$ = TsqlFunctionConvert($3, $5, NULL, true, @1);
 				}
 			| TSQL_TRY_CONVERT '(' Typename ',' a_expr ',' a_expr ')'
 				{
+					add_default_typmod($3);
 					$$ = TsqlFunctionConvert($3, $5, $7, true, @1);
 				}
 			| TSQL_DATEDIFF '(' datediff_arg ',' a_expr ',' a_expr ')'
@@ -1477,6 +1483,36 @@ func_expr_common_subexpr:
 					$$ = (Node *)makeFuncCall(TsqlSystemFuncName2("datediff_big"),
 											   list_make3(makeStringConst($3, @3), $5, $7),
 											   @1);
+				}
+			| TSQL_CAST '(' a_expr AS Typename ')'
+				{
+					add_default_typmod($5);
+					$$ = makeTypeCast($3, $5, NULL, NULL, NULL, @1);
+				}
+			| TSQL_CAST '(' a_expr AS Typename opt_default_fmt_clause')'
+				{
+					add_default_typmod($5);
+					$$ = makeTypeCast($3, $5, $6, NULL, NULL, @1);
+				}
+			| TSQL_CAST '(' a_expr AS Typename opt_default_fmt_clause opt_default_nls_clause ')'
+				{
+					add_default_typmod($5);
+					$$ = makeTypeCast($3, $5, $6, $7, NULL, @1);
+				}
+			| TSQL_CAST '(' a_expr AS Typename default_on_err_expr opt_default_fmt_clause ')'
+				{
+					add_default_typmod($5);
+					$$ = makeTypeCast($3, $5, $7, NULL, $6, @1);
+				}
+			| TSQL_CAST '(' a_expr AS Typename default_on_err_expr opt_default_fmt_clause opt_default_nls_clause ')'
+				{
+					add_default_typmod($5);
+					$$ = makeTypeCast($3, $5, $7, $8, $6, @1);
+				}
+			| TSQL_CAST '(' a_expr AS Typename default_on_err_expr ')'
+				{
+					add_default_typmod($5);
+					$$ = makeTypeCast($3, $5, NULL, NULL, $6, @1);
 				}
 		;
 
@@ -2140,6 +2176,78 @@ RemoveFuncStmt:
 					$$ = (Node *)n;
 				}
 		;
+
+AlterExtensionContentsStmt:
+			ALTER EXTENSION name add_drop TSQL_CAST '(' Typename AS Typename ')'
+				{
+					AlterExtensionContentsStmt *n = makeNode(AlterExtensionContentsStmt);
+					n->extname = $3;
+					n->action = $4;
+					n->objtype = OBJECT_CAST;
+					n->objname = list_make1($7);
+					n->objargs = list_make1($9);
+					$$ = (Node *) n;
+				}
+
+CommentStmt:
+			COMMENT ON TSQL_CAST '(' Typename AS Typename ')' IS comment_text
+				{
+					CommentStmt *n = makeNode(CommentStmt);
+					n->objtype = OBJECT_CAST;
+					n->objname = list_make1($5);
+					n->objargs = list_make1($7);
+					n->comment = $10;
+					$$ = (Node *) n;
+				}
+CreateCastStmt:
+			CREATE TSQL_CAST '(' Typename AS Typename ')'
+					WITH FUNCTION function_with_argtypes cast_context
+				{
+					CreateCastStmt *n = makeNode(CreateCastStmt);
+					n->sourcetype = $4;
+					n->targettype = $6;
+					n->func = $10;
+					n->context = (CoercionContext) $11;
+					n->inout = false;
+					$$ = (Node *)n;
+				}
+			| CREATE TSQL_CAST '(' Typename AS Typename ')'
+					WITHOUT FUNCTION cast_context
+				{
+					CreateCastStmt *n = makeNode(CreateCastStmt);
+					n->sourcetype = $4;
+					n->targettype = $6;
+					n->func = NULL;
+					n->context = (CoercionContext) $10;
+					n->inout = false;
+					$$ = (Node *)n;
+				}
+			| CREATE TSQL_CAST '(' Typename AS Typename ')'
+					WITH INOUT cast_context
+				{
+					CreateCastStmt *n = makeNode(CreateCastStmt);
+					n->sourcetype = $4;
+					n->targettype = $6;
+					n->func = NULL;
+					n->context = (CoercionContext) $10;
+					n->inout = true;
+					$$ = (Node *)n;
+				}
+		;
+DropCastStmt:
+			DROP TSQL_CAST opt_if_exists '(' Typename AS Typename ')' opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CAST;
+					n->objects = list_make1(list_make1($5));
+					n->arguments = list_make1(list_make1($7));
+					n->behavior = $9;
+					n->missing_ok = $3;
+					n->concurrent = false;
+					$$ = (Node *)n;
+				}
+		;
+
 
 /*
  * NOTE: the OptFileGroup production doesn't really belong here. We accept OptFileGroup

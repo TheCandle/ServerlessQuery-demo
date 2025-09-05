@@ -6138,6 +6138,16 @@ $BODY$
 LANGUAGE plpgsql
 STABLE;
 
+CREATE OR REPLACE FUNCTION sys.shark_conv_helper_to_varchar(
+    typename UNKNOWN,
+    arg UNKNOWN,
+    p_try BOOL,
+    p_style NUMERIC DEFAULT -1
+) RETURNS VARCHAR
+LANGUAGE sql AS $$
+    SELECT sys.shark_conv_helper_to_varchar($1::TEXT, $2::TEXT, $3, $4);
+$$;
+
 CREATE OR REPLACE FUNCTION sys.shark_conv_to_varchar(IN typename TEXT,
 														IN arg anyelement,
 														IN p_style NUMERIC DEFAULT -1)

@@ -450,7 +450,7 @@ select * from t2 ORDER BY a;
 
 --test index
 create index t_var_idx on t3(a);
-CREATE INDEX t_var_idx_char ON t3(cast(a as varchar));
+CREATE INDEX t_var_idx_char ON t3(cast(a as varchar(50)));
 explain select /*+ IndexScan(t3 t_var_idx) */ id, a from t3 where a = '12345678901234567890'::varbinary;
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
@@ -459,12 +459,12 @@ explain select /*+ IndexScan(t3 t_var_idx) */ id, a from t3 where a = '123456789
    Index Cond: (a = '0x3132333435363738393031323334353637383930'::varbinary)
 (3 rows)
 
-explain select /*+ IndexScan(t3 t_var_idx_char) */ id, a from t3 where a::varchar = 'aa';
+explain select /*+ IndexScan(t3 t_var_idx_char) */ id, a from t3 where a::varchar(50) = 'aa';
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  [Bypass]
  Index Scan using t_var_idx_char on t3  (cost=0.00..8.27 rows=1 width=36)
-   Index Cond: (((a)::character varying)::text = 'aa'::text)
+   Index Cond: (((a)::character varying(50))::text = 'aa'::text)
 (3 rows)
 
 -- test partition, error varbinary cannot be partition key in sqlserver
@@ -543,7 +543,7 @@ CREATE EXTENSION shark;
 Indexes:
     "idx3" btree (a) TABLESPACE pg_default
     "t_var_idx" btree (a) TABLESPACE pg_default
-    "t_var_idx_char" btree ((a::character varying)) TABLESPACE pg_default
+    "t_var_idx_char" btree ((a::character varying(50))) TABLESPACE pg_default
 
 select * from test_varbinary.public.t3;
  id |                         a                          
@@ -565,7 +565,7 @@ select * from test_varbinary.public.t3;
 Indexes:
     "idx3" btree (a) TABLESPACE pg_default
     "t_var_idx" btree (a) TABLESPACE pg_default
-    "t_var_idx_char" btree ((a::character varying)) TABLESPACE pg_default
+    "t_var_idx_char" btree ((a::character varying(50))) TABLESPACE pg_default
 
 select * from restore_varbinary.public.t3;
  id |                         a                          

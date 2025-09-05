@@ -274,7 +274,8 @@ drop function if exists sys.shark_conv_helper_to_smalldatetime(IN typmod INTEGER
 drop function if exists sys.shark_conv_datetime_to_string(IN p_datatype TEXT, IN p_src_datatype TEXT, IN p_datetimeval TIMESTAMP(6) WITHOUT TIME ZONE, IN p_style NUMERIC);
 drop function if exists sys.shark_conv_string_to_datetime2(IN p_datatype TEXT, IN p_datetimestring TEXT, IN p_style NUMERIC);
 
-drop function if exists sys.shark_conv_helper_to_varchar(IN typename TEXT, IN arg ANYELEMENT, IN try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_varchar(IN typename TEXT, IN arg ANYELEMENT, IN p_try BOOL, IN p_style NUMERIC);
+drop function if exists sys.shark_conv_helper_to_varchar(typename UNKNOWN, arg UNKNOWN, p_try BOOL, p_style NUMERIC);
 drop function if exists sys.shark_conv_to_varchar(IN typename TEXT, IN arg anyelement, IN p_style NUMERIC);
 drop function if exists sys.shark_try_conv_money_to_string(IN p_datatype TEXT, IN p_moneyval NUMERIC, IN p_style NUMERIC);
 drop function if exists sys.shark_try_conv_float_to_string(IN p_datatype TEXT, IN p_floatval FLOAT, IN p_style NUMERIC);

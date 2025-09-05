@@ -238,5 +238,32 @@ static bool is_qualifed_char_type(char* typename_string)
            (strcmp(typename_string, "pg_catalog.bpchar") == 0);
 }
 
+static void add_default_typmod(TypeName* typname)
+{
+    /* For compatibility reason, check the incoming typname
+     * and add a default typmod when these three conditions are all fullfilled:
+     * 1). The type has typmod
+     * 2). The types typmod is not set
+     * 3). The default value works in sqlserver -- this default typmod
+     * does not work on all types that has typemod in sqlserver
+     * Then the type will be given a default typmod 30
+     */
+
+    if (typname->names == NIL || list_length(typname->names) != 2) {
+        return;
+    }
+
+    if (strcmp(((Value*)lsecond(typname->names))->val.str, "bpchar") == 0 && typname->typmods != NIL &&
+        ((A_Const*)linitial(typname->typmods))->location == -1) {
+        ((A_Const*)(linitial(typname->typmods)))->val.val.ival = 30;
+    } else if (strcmp(((Value*)lsecond(typname->names))->val.str, "varchar") == 0 && typname->typmods == NIL) {
+        A_Const* m_a_const = (A_Const*)makeIntConst(30, -1);
+        List* m_typmods = list_make1(m_a_const);
+        typname->typmods = m_typmods;
+    }
+
+    return;
+}
+
 #include "scan-backend.inc"
 #undef SCANINC
