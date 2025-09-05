@@ -171,12 +171,12 @@ create view v1 as select 0x123456;
 select * from v1;
 \d+ v1;
 
-create unlogged table test1(id int,var1 varbinary(10),var2 varbinary(20)default '0x161616' );
-\d+ test1
-insert into test1 (id, var1) VALUES (1, 0x123456);
-select id,var1,var2::varchar from test1;
+create table test1_default(id int,var1 varbinary(10),var2 varbinary(20)default '0x161616' );
+\d+ test1_default
+insert into test1_default (id, var1) VALUES (1, 0x123456);
+select id,var1,var2::varchar from test1_default;
 
-create unlogged table test2(id int,var1 varbinary(10),var2 varbinary(20)default 0x161616 );
+create table test2(id int,var1 varbinary(10),var2 varbinary(20)default 0x161616 );
 insert into test2 (id, var1) VALUES (1, 0x123456);
 select id,var1,var2 from test2;
 

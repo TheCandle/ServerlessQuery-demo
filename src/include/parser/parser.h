@@ -57,7 +57,7 @@ typedef Oid (*GetVarbinaryOidHookType) ();
 #define TSQL_MAX_NUM_PRECISION 38
 #define TSQL_HEX_CONST_TYPMOD (-16)
 #define TSQL_HAS_VARBINARY \
-     u_sess ->attr.attr_sql.shark && u_sess->hook_cxt.getVarbinaryOidHook != NULL&& \
+    u_sess->attr.attr_sql.shark && u_sess->hook_cxt.getVarbinaryOidHook != NULL && \
     ((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))() != InvalidOid
 #define TSQL_VARBINARY_OID (((GetVarbinaryOidHookType)(u_sess->hook_cxt.getVarbinaryOidHook))())
 
