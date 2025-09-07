@@ -6068,13 +6068,18 @@ static void exec_describe_portal_message(const char* portal_name)
     if (t_thrd.postgres_cxt.whereToSendOutput != DestRemote)
         return; /* can't actually do anything... */
 
-    if (portal->tupDesc)
+    if (portal->tupDesc) {
         SendRowDescriptionMessage(&(*t_thrd.postgres_cxt.row_description_buf),
             portal->tupDesc,
             FetchPortalTargetList(portal),
             portal->formats);
-    else
+    } else if (u_sess->hook_cxt.pluginCheckSelectProcHook && 
+                ((bool (*)(void))u_sess->hook_cxt.pluginCheckSelectProcHook)() &&
+                    portal->commandTag && strcasecmp(portal->commandTag, "call") == 0) {
+        /* nothing input */
+    } else {
         pq_putemptymessage('n'); /* NoData */
+    }
 }
 
 /*
