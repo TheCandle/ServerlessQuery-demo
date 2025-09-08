@@ -1689,6 +1689,9 @@ Tuple ExecAutoIncrement(Relation rel, EState* estate, TupleTableSlot* slot, Tupl
         if (modify_tuple) {
             tuple = autoinc_modify_tuple(rel->rd_att, estate, slot, tuple, autoinc);
         }
+    } else {
+        /* if the value of auto_increment column is given, set last_autoinc_value to send by dolphin protocol */
+        u_sess->cmd_cxt.last_autoinc_value = autoinc;
     }
     return tuple;
 }
@@ -1714,6 +1717,7 @@ static void UpdateAutoIncrement(Relation rel, Tuple tuple, EState* estate)
 
     if (estate->first_autoinc != 0 && u_sess->cmd_cxt.last_insert_id != estate->first_autoinc) {
         u_sess->cmd_cxt.last_insert_id = estate->first_autoinc;
+        u_sess->cmd_cxt.last_autoinc_value = estate->first_autoinc;
     }
 }
 
