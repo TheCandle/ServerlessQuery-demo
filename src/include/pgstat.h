@@ -109,7 +109,7 @@ typedef int64 PgStat_Counter;
  */
 typedef struct PgStat_TableCounts {
     PgStat_Counter t_numscans;
-    TimestampTz lastscan;
+    TimestampTz t_lastscan;
 
     PgStat_Counter t_tuples_returned;
     PgStat_Counter t_tuples_fetched;

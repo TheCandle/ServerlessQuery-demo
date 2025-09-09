@@ -873,8 +873,8 @@ void pgstat_report_stat(bool force)
                 TimestampTz t = t_thrd.xact_cxt.xactStopTimestamp;
                 if (t == 0)
                     t = GetCurrentTimestamp();
-                if (t > this_ent->t_counts.lastscan)
-                    this_ent->t_counts.lastscan = t;
+                if (t > this_ent->t_counts.t_lastscan)
+                    this_ent->t_counts.t_lastscan = t;
             }
             if ((unsigned int)++this_msg->m_nentries >= PGSTAT_NUM_TABENTRIES) {
                 pgstat_send_tabstat(this_msg);
@@ -5959,6 +5959,7 @@ static PgStat_StatTabEntry* pgstat_get_tab_entry(
     /* If not found, initialize the new one. */
     if (!found) {
         result->numscans = 0;
+        result->lastscan = 0;
         result->tuples_returned = 0;
         result->tuples_fetched = 0;
         result->tuples_inserted = 0;
@@ -6920,6 +6921,7 @@ static void pgstat_recv_tabstat(PgStat_MsgTabstat* msg, int len)
              * just got.
              */
             tabentry->numscans = tabmsg->t_counts.t_numscans;
+            tabentry->lastscan = tabmsg->t_counts.t_lastscan;
             tabentry->tuples_returned = tabmsg->t_counts.t_tuples_returned;
             tabentry->tuples_fetched = tabmsg->t_counts.t_tuples_fetched;
             tabentry->tuples_inserted = tabmsg->t_counts.t_tuples_inserted;
@@ -6980,8 +6982,8 @@ static void pgstat_recv_tabstat(PgStat_MsgTabstat* msg, int len)
         }
 
         if (tabmsg->t_counts.t_numscans) {
-            if (tabmsg->t_counts.lastscan > tabentry->lastscan)
-                tabentry->lastscan = tabmsg->t_counts.lastscan;
+            if (tabmsg->t_counts.t_lastscan > tabentry->lastscan)
+                tabentry->lastscan = tabmsg->t_counts.t_lastscan;
         }
 
         /* Clamp n_live_tuples in case of negative delta_live_tuples */
@@ -7018,6 +7020,7 @@ static void pgstat_recv_tabstat(PgStat_MsgTabstat* msg, int len)
              * just got.
              */
             tabentry->numscans = tabmsg->t_counts.t_numscans;
+            tabentry->lastscan = tabmsg->t_counts.t_lastscan;
             tabentry->tuples_returned = tabmsg->t_counts.t_tuples_returned;
             tabentry->tuples_fetched = tabmsg->t_counts.t_tuples_fetched;
             tabentry->tuples_inserted = tabmsg->t_counts.t_tuples_inserted;
@@ -7069,8 +7072,8 @@ static void pgstat_recv_tabstat(PgStat_MsgTabstat* msg, int len)
         }
 
         if (tabmsg->t_counts.t_numscans) {
-            if (tabmsg->t_counts.lastscan > tabentry->lastscan)
-                tabentry->lastscan = tabmsg->t_counts.lastscan;
+            if (tabmsg->t_counts.t_lastscan > tabentry->lastscan)
+                tabentry->lastscan = tabmsg->t_counts.t_lastscan;
         }
     }
 }
