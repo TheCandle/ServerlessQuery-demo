@@ -758,9 +758,9 @@ void standard_ExecutorFinish(QueryDesc *queryDesc)
 
     /* Execute queued AFTER triggers, unless told not to */
     if (!(estate->es_top_eflags & EXEC_FLAG_SKIP_TRIGGERS)) {
-        int64 save_row_count = BEENTRY_STMEMENET_CXT.current_row_count;
+        int64 save_row_count = u_sess->statement_cxt.current_row_count;
         AfterTriggerEndQuery(estate);
-        BEENTRY_STMEMENET_CXT.current_row_count = save_row_count;
+        u_sess->statement_cxt.current_row_count = save_row_count;
     }
     if (queryDesc->totaltime) {
         InstrStopNode(queryDesc->totaltime, 0);
