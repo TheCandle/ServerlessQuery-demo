@@ -786,8 +786,6 @@ tsql_stmt :
 			| CreatePackageBodyStmt
 			| CreateGroupStmt
 			| CreateMatViewStmt
-			| CreateMatViewLogStmt
-			| DropMatViewLogStmt
 			| CreateModelStmt  // DB4AI
 			| CreateNodeGroupStmt
 			| CreateNodeStmt

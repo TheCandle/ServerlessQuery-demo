@@ -512,7 +512,7 @@ select
 from pg_class c
 inner join pg_namespace s on s.oid = c.relnamespace
 inner join pg_index i on i.indexrelid = c.oid
-where c.relkind = 'i' and i.indisenable and i.indisvalid and c.parttype = 'n'
+where c.relkind = 'i' and i.indisvalid and c.parttype = 'n'
 and has_table_privilege(quote_ident(s.nspname) ||'.'||quote_ident(c.relname), 'SELECT');
 grant select on sys.sysindexes to public;
 
@@ -527,10 +527,9 @@ from pg_index as i
 inner join pg_class c_ind on c_ind.oid = i.indexrelid
 inner join pg_class c_tab on c_tab.oid = i.indrelid
 inner join pg_namespace s on s.oid = c_ind.relnamespace
-join pg_class c on i.indexrelid = c.oid,
-lateral (
-    select generate_series(0, array_length(i.indkey::int2[], 1) - 1) as pos
-) as idx
+join pg_class c on i.indexrelid = c.oid
+cross join 
+    generate_series(0, array_length(i.indkey::int2[], 1) - 1) as idx(pos)
 where has_table_privilege(quote_ident(s.nspname) ||'.'||quote_ident(c_tab.relname), 'SELECT');
 grant select on sys.sysindexkeys to public;
 
@@ -854,7 +853,7 @@ select
         else sys.tsql_relation_reloptions_helper(i.reloptions, 'fillfactory')
         end as tinyint) as fill_factor,
   cast(0 as bit) as is_padded,
-  cast(case ind.indisenable when 't' then 0 else 1 end as bit) as is_disabled,
+  cast(0 as bit) as is_disabled,
   cast(0 as bit) as is_hypothetical,
   cast(1 as bit) as allow_row_locks,
   cast(1 as bit) as allow_page_locks,

@@ -297,21 +297,6 @@ int pltsql_yylex(void)
                 {
                     tok1 = T_PLACEHOLDER;
                 }
-            } else if ((OBJECTTYPE_MEMBER_PROC == u_sess->plsql_cxt.typfunckind
-                        || OBJECTTYPE_CONSTRUCTOR_PROC == u_sess->plsql_cxt.typfunckind
-                        || OBJECTTYPE_DEFAULT_CONSTRUCTOR_PROC == u_sess->plsql_cxt.typfunckind
-                        || OBJECTTYPE_MAP_PROC == u_sess->plsql_cxt.typfunckind
-                        || OBJECTTYPE_ORDER_PROC == u_sess->plsql_cxt.typfunckind)
-                        && ('=' == tok2 || COLON_EQUALS == tok2 || '[' == tok2 || '(' == tok2)) {
-                /* check self.A while creating type body */
-                List* idents_bak = aux1.lval.cword.idents;
-                if (plpgsql_parse_dblword("self", aux1.lval.str, &aux1.lval.wdatum, &aux1.lval.cword, &dbl_tok_flag)) {
-                    tok1 = T_DATUM;
-                } else {
-                    /* reset */
-                    aux1.lval.cword.idents = idents_bak;
-                    tok1 = T_DATUM;
-                }
             } else {
                 tok1 = T_WORD;
             }
@@ -558,8 +543,6 @@ static int get_self_defined_tok(int tok_flag)
             return T_TABLE_VAR;
         case PLPGSQL_TOK_PACKAGE_VARIABLE:
             return T_PACKAGE_VARIABLE;
-        case PLPGSQL_TOK_OBJECT_TYPE_VAR_METHOD:
-            return T_OBJECT_TYPE_VAR_METHOD;
         default:
             ereport(ERROR,
                 (errmodule(MOD_PLSQL),

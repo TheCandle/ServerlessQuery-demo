@@ -18,7 +18,7 @@
 #include "pltsql.h"
 #include "pgstat.h"
 #include "catalog/pg_object.h"
-#include "catalog/pg_object_type.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_cast.h"
 #include "catalog/pg_proc_ext.h"
 #include "catalog/gs_package.h"
@@ -72,14 +72,13 @@ static void ProcInsertGsSource(Oid funcOid, bool status)
     bool isnull = false;
 
     /* Skip nested create function stmt within package body */
-    bool ispackage = SysCacheGetAttr(PROCOID, procTup, Anum_pg_proc_package, &isnull);
     Datum packageIdDatum = SysCacheGetAttr(PROCOID, procTup, Anum_pg_proc_packageid, &isnull);
     if (isnull) {
         ereport(ERROR, (errmodule(MOD_PLSQL), errcode(ERRCODE_UNDEFINED_OBJECT),
                 errmsg("The prokind of the function is null"),
                 errhint("Check whether the definition of the function is complete in the pg_proc system table.")));
     }
-    Oid packageOid = ispackage ? DatumGetObjectId(packageIdDatum) : InvalidOid;
+    Oid packageOid = DatumGetObjectId(packageIdDatum);
     if (OidIsValid(packageOid)) {
         ReleaseSysCache(procTup);
         return;
@@ -106,7 +105,7 @@ static void ProcInsertGsSource(Oid funcOid, bool status)
 
     char* name = NameStr(procStruct->proname);
     Oid nspid = procStruct->pronamespace;
-    const char* type = PROC_IS_PRO(prokind) ? ("procedure") : ("function");
+    const char* type = (prokind == PROKIND_PROCEDURE) ? ("procedure") : ("function");
     if (strcasecmp(get_language_name((Oid)procStruct->prolang), "plpgsql") != 0) {
         ReleaseSysCache(procTup);
         return;
@@ -189,9 +188,8 @@ static Oid get_package_id(Oid func_oid)
                 errmsg("cache lookup failed for function %u, while compile function", func_oid)));
     }
     proc_struct = (Form_pg_proc)GETSTRUCT(proc_tup);
-    bool ispackage = SysCacheGetAttr(PROCOID, proc_tup, Anum_pg_proc_package, &isnull);
     package_oid_datum = SysCacheGetAttr(PROCOID, proc_tup, Anum_pg_proc_packageid, &isnull);
-    package_oid = ispackage ? DatumGetObjectId(package_oid_datum) : InvalidOid;
+    package_oid = DatumGetObjectId(package_oid_datum);
 
     if (OidIsValid(package_oid)) {
         pkgtup = SearchSysCache1(PACKAGEOID, ObjectIdGetDatum(package_oid));
@@ -290,10 +288,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
     int rc;
     Oid func_oid = fcinfo->flinfo->fn_oid;
     Oid* saved_Pseudo_CurrentUserId = NULL;
-    Oid old_user = InvalidOid;
-    int save_sec_context = 0;
-    Oid cast_owner = InvalidOid;
-    bool has_switch = false;
     PGSTAT_INIT_TIME_RECORD();
     bool needRecord = false;
     PLpgSQL_package* pkg = NULL;
@@ -301,46 +295,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
     int pkgDatumsNumber = 0;
     bool savedisAllowCommitRollback = true;
     bool enableProcCoverage = u_sess->attr.attr_common.enable_proc_coverage;
-    Oid saveCallerOid = InvalidOid;
-    Oid savaCallerParentOid = InvalidOid;
-    bool is_pkg_func = false;
-    
-    /* Check if type body exists if using type method */
-    HeapTuple proc_tup = NULL;
-    bool isnull = false;
-    /*
-     * If the function in a package, thne compile the package, and find the compiled function in
-     * pkg->proc_compiled_list
-     */
-    proc_tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(func_oid));
-    if (!HeapTupleIsValid(proc_tup)) {
-        ereport(ERROR, (errmodule(MOD_PLSQL), errcode(ERRCODE_CACHE_LOOKUP_FAILED),
-            errmsg("cache lookup failed for function %u, while compile function.", func_oid)));
-    }
-    bool ispackage = SysCacheGetAttr(PROCOID, proc_tup, Anum_pg_proc_package, &isnull);
-    Oid protypoid = ispackage ? InvalidOid : DatumGetObjectId(
-        SysCacheGetAttr(PROCOID, proc_tup, Anum_pg_proc_packageid, &isnull));
-    /* Find method type from pg_object */
-    char typmethodkind = OBJECTTYPE_NULL_PROC;
-    HeapTuple objTuple = SearchSysCache2(PGOBJECTID, ObjectIdGetDatum(func_oid), CharGetDatum(OBJECT_TYPE_PROC));
-    if (HeapTupleIsValid(objTuple)) {
-        typmethodkind = GET_PROTYPEKIND(SysCacheGetAttr(PGOBJECTID, objTuple, Anum_pg_object_options, &isnull));
-        ReleaseSysCache(objTuple);
-    }
-    if (OidIsValid(protypoid) && (typmethodkind != OBJECTTYPE_DEFAULT_CONSTRUCTOR_PROC) &&
-        (typmethodkind != TABLE_VARRAY_CONSTRUCTOR_PROC)) {
-        HeapTuple tuple = SearchSysCache1(OBJECTTYPE, ObjectIdGetDatum(protypoid));
-        if (!HeapTupleIsValid(tuple)) {
-            ereport(ERROR, (errmodule(MOD_PLSQL), errcode(ERRCODE_CACHE_LOOKUP_FAILED),
-                errmsg("cache lookup failed for object type %u, while compile function.", protypoid)));
-        }
-        Form_pg_object_type pg_object_type_struct = (Form_pg_object_type)GETSTRUCT(tuple);
-        if (!pg_object_type_struct->isbodydefined)
-            ereport(ERROR, (errmodule(MOD_PLSQL), errcode(ERRCODE_OBJECT_TYPE_BODY_DEFINE_ERROR),
-                errmsg("type body \"%s\" not define", get_typename(protypoid))));
-        ReleaseSysCache(tuple);
-    }
-    ReleaseSysCache(proc_tup);
     /*
      * if the atomic stored in fcinfo is false means allow
      * commit/rollback within stored procedure.
@@ -350,14 +304,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
         nonatomic = IsA(fcinfo->context, FunctionScanState) && !castNode(FunctionScanState, fcinfo->context)->atomic;
     } else {
         nonatomic = u_sess->SPI_cxt.is_allow_commit_rollback;
-    }
-
-    /* get cast owner and make sure current user is cast owner when execute cast-func */
-    GetUserIdAndSecContext(&old_user, &save_sec_context);
-    cast_owner = u_sess->exec_cxt.cast_owner;
-    if (cast_owner != InvalidCastOwnerId && OidIsValid(cast_owner)) {
-        SetUserIdAndSecContext(cast_owner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-        has_switch = true;
     }
 
     bool save_need_create_depend = u_sess->plsql_cxt.need_create_depend;
@@ -385,26 +331,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
             pkg = PackageInstantiation(package_oid);
         }
     }
-
-    proc_tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(func_oid));
-    if (!HeapTupleIsValid(proc_tup)) {
-        ereport(ERROR,  (errmodule(MOD_PLSQL),  errcode(ERRCODE_CACHE_LOOKUP_FAILED),
-                errmsg("cache lookup failed for function %u, while compile function", func_oid)));
-    }
-
-    Oid caller_oid = GetProprocoidByOid(HeapTupleGetOid(proc_tup));
-    if (OidIsValid(caller_oid) && caller_oid == getCurrCallerFuncOid()) {
-        PLpgSQL_func_hashkey hashkey;
-        Form_pg_proc proc_struct = (Form_pg_proc)GETSTRUCT(proc_tup);
-        fcinfo->fncollation = InvalidOid;
-        /* Compute hashkey using function signature and actual arg types */
-        compute_function_hashkey(proc_tup, fcinfo, proc_struct, &hashkey, false);
-            /* And do the lookup */
-        func = plpgsql_HashTableLookup(&hashkey);
-    }
-
-    ReleaseSysCache(proc_tup);
-
     if (pkg != NULL) {
         ListCell* l;
         foreach(l, pkg->proc_compiled_list) {
@@ -433,7 +359,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
 #endif
     int connect = SPI_connectid();
     Oid firstLevelPkgOid = InvalidOid;
-    Oid firstLevelfuncOid = InvalidOid;
     bool save_curr_status = GetCurrCompilePgObjStatus();
     bool save_is_exec_autonomous = u_sess->plsql_cxt.is_exec_autonomous;
     bool save_is_pipelined = u_sess->plsql_cxt.is_pipelined;
@@ -444,7 +369,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
          * save running package value
          */
         firstLevelPkgOid = saveCallFromPkgOid(package_oid);
-        firstLevelfuncOid = getCurrCallerFuncOid();
         bool saved_current_stp_with_exception = plpgsql_get_current_value_stp_with_exception();
         int *coverage = NULL;
         if (enableProcCoverage) {
@@ -459,7 +383,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
         if (func == NULL) {
             u_sess->plsql_cxt.compile_has_warning_info = false;
             SetCurrCompilePgObjStatus(true);
-            u_sess->plsql_cxt.isCreateFuncSubprogramBody = false;
             func = pltsql_compile(fcinfo, false);
             if (enable_plpgsql_gsdependency_guc() && func != NULL) {
                 SetPgObjectValid(func_oid, OBJECT_TYPE_PROC, GetCurrCompilePgObjStatus());
@@ -469,20 +392,7 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
                                get_func_name(func_oid))));
                 }
             }
-            u_sess->plsql_cxt.isCreateFuncSubprogramBody = true;
-            u_sess->plsql_cxt.cur_func_oid = func->fn_oid;
         }
-
-        if (!is_pkg_func && u_sess->plsql_cxt.running_func_oid != func->fn_oid) {
-            if (func->proc_list != NULL) {
-                saveCallFromFuncOid(func->fn_oid);
-                savaCallerParentOid = func->parent_oid;
-            } else if (func->parent_func) {
-                saveCallFromFuncOid(func->parent_oid);
-            }
-        }
-        saveCallerOid = func->fn_oid;
-        
         if (func->fn_readonly) {
             stp_disable_xact_and_set_err_msg(&savedisAllowCommitRollback, STP_XACT_IMMUTABLE);
         }
@@ -602,12 +512,7 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
             /* debug finished, close debug resource */
             if (func->debug) {
                 /* if debuger is waiting for end msg, send end */
-                PlDebuggerComm* debug_comm = &g_instance.pldebug_cxt.debug_comm[func->debug->comm->comm_idx];
-                if (debug_comm->isGmsRunning()) {
-                    server_send_gms_end_msg(func->debug);
-                } else {
-                    server_send_end_msg(func->debug);
-                }
+                server_send_end_msg(func->debug);
                 /* pass opt to upper debug function */
                 server_pass_upper_debug_opt(func->debug);
                 clean_up_debug_server(func->debug, false, true);
@@ -619,14 +524,12 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
             // resume the search_path when there is an error
             PopOverrideSearchPath();
 
-            saveCallFromFuncOid(InvalidOid);
             restoreCallFromPkgOid(secondLevelPkgOid);
             ereport(DEBUG3, (errmodule(MOD_NEST_COMPILE), errcode(ERRCODE_LOG),
                 errmsg("%s clear curr_compile_context because of error.", __func__)));
             /* reset nest plpgsql compile */
             u_sess->plsql_cxt.curr_compile_context = save_compile_context;
             u_sess->plsql_cxt.compile_status = save_compile_status;
-            u_sess->plsql_cxt.cur_func_oid = InvalidOid;
             clearCompileContextList(save_compile_list_length);
 
             u_sess->misc_cxt.Pseudo_CurrentUserId = saved_Pseudo_CurrentUserId;
@@ -645,13 +548,7 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
         /* debug finished, close debug resource */
         if (func->debug) {
             /* if debuger is waiting for end msg, send end */
-            PlDebuggerComm* debug_comm = &g_instance.pldebug_cxt.debug_comm[func->debug->comm->comm_idx];
-            /* if debuger is waiting for end msg, send end */
-            if (debug_comm->isGmsRunning()) {
-                server_send_gms_end_msg(func->debug);
-            } else {
-                server_send_end_msg(func->debug);
-            }
+            server_send_end_msg(func->debug);
             /* pass opt to upper debug function */
             server_pass_upper_debug_opt(func->debug);
             clean_up_debug_server(func->debug, false, true);
@@ -701,8 +598,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
         SetCurrCompilePgObjStatus(save_curr_status);
         u_sess->plsql_cxt.is_exec_autonomous = save_is_exec_autonomous;
         u_sess->plsql_cxt.is_pipelined = save_is_pipelined;
-        saveCallFromFuncOid(firstLevelfuncOid);
-        u_sess->plsql_cxt.cur_func_oid = InvalidOid;
         /* clean stp save pointer if the outermost function is end. */
         if (u_sess->SPI_cxt._connected == 0) {
             t_thrd.utils_cxt.STPSavedResourceOwner = NULL;
@@ -759,18 +654,6 @@ Datum pltsql_call_handler(PG_FUNCTION_ARGS)
     }
 #endif
     UpdateCurrCompilePgObjStatus(save_curr_status);
-    if (has_switch) {
-        SetUserIdAndSecContext(old_user, save_sec_context);
-        u_sess->exec_cxt.cast_owner = InvalidOid;
-    }
-    
-    u_sess->plsql_cxt.cur_func_oid = InvalidOid;
-    if (!is_pkg_func && u_sess->plsql_cxt.running_func_oid == saveCallerOid) {
-        if (!OidIsValid(savaCallerParentOid) && OidIsValid(firstLevelfuncOid))
-            saveCallFromFuncOid(firstLevelfuncOid);
-        else
-            saveCallFromFuncOid(savaCallerParentOid);
-    }
     return retval;
 }
 
@@ -859,14 +742,6 @@ Datum pltsql_inline_handler(PG_FUNCTION_ARGS)
 #endif
         popToOldCompileContext(save_compile_context);
         CompileStatusSwtichTo(save_compile_status);
-
-#ifdef ENABLE_MOT
-        if (needSPIFinish) {
-#endif
-            (void)SPI_finish();
-#ifdef ENABLE_MOT
-        }
-#endif
         PG_RE_THROW();
     }
     PG_END_TRY();
@@ -929,13 +804,8 @@ Datum pltsql_inline_handler(PG_FUNCTION_ARGS)
 #ifndef ENABLE_MULTIPLE_NODES
         /* debug finished, close debug resource */
         if (func->debug) {
-            PlDebuggerComm* debug_comm = &g_instance.pldebug_cxt.debug_comm[func->debug->comm->comm_idx];
             /* if debuger is waiting for end msg, send end */
-            if (debug_comm->isGmsRunning()) {
-                server_send_gms_end_msg(func->debug);
-            } else {
-                server_send_end_msg(func->debug);
-            }
+            server_send_end_msg(func->debug);
             /* pass opt to upper debug function */
             server_pass_upper_debug_opt(func->debug);
             clean_up_debug_server(func->debug, false, true);
@@ -964,14 +834,6 @@ Datum pltsql_inline_handler(PG_FUNCTION_ARGS)
         if (u_sess->SPI_cxt._connected == 0) {
             plpgsql_hashtable_clear_invalid_obj();
         }
-
-#ifdef ENABLE_MOT
-        if (needSPIFinish) {
-#endif
-            (void)SPI_finish();
-#ifdef ENABLE_MOT
-        }
-#endif
         PG_RE_THROW();
     }
     PG_END_TRY();
@@ -980,13 +842,7 @@ Datum pltsql_inline_handler(PG_FUNCTION_ARGS)
     /* debug finished, close debug resource */
     if (func->debug) {
         /* if debuger is waiting for end msg, send end */
-        PlDebuggerComm* debug_comm = &g_instance.pldebug_cxt.debug_comm[func->debug->comm->comm_idx];
-        /* if debuger is waiting for end msg, send end */
-        if (debug_comm->isGmsRunning()) {
-            server_send_gms_end_msg(func->debug);
-        } else {
-            server_send_end_msg(func->debug);
-        }
+        server_send_end_msg(func->debug);
         /* pass opt to upper debug function */
         server_pass_upper_debug_opt(func->debug);
         clean_up_debug_server(func->debug, false, true);
@@ -1079,9 +935,6 @@ Datum pltsql_validator(PG_FUNCTION_ARGS)
     char* argmodes = NULL;
     bool is_dml_trigger = false;
     bool is_event_trigger = false;
-    Oid saveCallerOid = InvalidOid;
-    Oid savaCallerParentOid = InvalidOid;
-    bool is_pkg_func = false;
     
     int i;
     /*
@@ -1181,17 +1034,6 @@ Datum pltsql_validator(PG_FUNCTION_ARGS)
             u_sess->parser_cxt.isCreateFuncOrProc = true;
             func = pltsql_compile(&fake_fcinfo, true);
             u_sess->parser_cxt.isCreateFuncOrProc = false;
-            if (func != NULL) {
-                if (OidIsValid(func->pkg_oid)) {
-                    is_pkg_func = true;
-                }
-                // ignore in case of function has subprogram to update the running_func_oid.
-                if (!is_pkg_func && u_sess->plsql_cxt.running_func_oid != func->fn_oid) {
-                    saveCallFromFuncOid(func->parent_oid);
-                }
-                saveCallerOid = func->fn_oid;
-                savaCallerParentOid = func->parent_oid;
-            }
         }
         PG_CATCH();
         {
@@ -1211,10 +1053,6 @@ Datum pltsql_validator(PG_FUNCTION_ARGS)
                         InsertError(u_sess->plsql_cxt.curr_compile_context->plpgsql_curr_compile_package->pkg_oid);
                     }
                     u_sess->plsql_cxt.isCreateFunction = false;
-                    u_sess->plsql_cxt.isCreateTypeBody = false;
-                    u_sess->plsql_cxt.createFunctionOid = InvalidOid;
-                    saveCallFromFuncOid(InvalidOid);
-                    u_sess->plsql_cxt.isCreateFuncSubprogramBody = false;
                 }
             }
 #endif
@@ -1224,10 +1062,6 @@ Datum pltsql_validator(PG_FUNCTION_ARGS)
             u_sess->plsql_cxt.package_as_line = 0;
             u_sess->plsql_cxt.package_first_line = 0;
             u_sess->plsql_cxt.isCreateFunction = false;
-            u_sess->plsql_cxt.isCreateTypeBody = false;
-            u_sess->plsql_cxt.typfunckind = OBJECTTYPE_NULL_PROC;
-            u_sess->plsql_cxt.createFunctionOid = InvalidOid;
-            u_sess->plsql_cxt.isCreateFuncSubprogramBody = false;
             ereport(DEBUG3, (errmodule(MOD_NEST_COMPILE), errcode(ERRCODE_LOG),
                 errmsg("%s clear curr_compile_context because of error.", __func__)));
             /* reset nest plpgsql compile */
@@ -1246,13 +1080,13 @@ Datum pltsql_validator(PG_FUNCTION_ARGS)
         PG_END_TRY();
         bool isNotComipilePkg = u_sess->plsql_cxt.curr_compile_context == NULL ||
             u_sess->plsql_cxt.curr_compile_context->plpgsql_curr_compile_package == NULL;
-        bool isNotCompileSubprogram = (func && !OidIsValid(func->parent_oid));
+
         if (!IsInitdb && (
 #ifdef ENABLE_MULTIPLE_NODES
             !IS_MAIN_COORDINATOR ||
 #endif
             u_sess->attr.attr_common.enable_full_encryption) &&
-            isNotComipilePkg && isNotCompileSubprogram) {
+            isNotComipilePkg) {
                 /*
                  * set ClientAuthInProgress to prevent warnings from the parser
                  * to be sent to client
@@ -1265,13 +1099,10 @@ Datum pltsql_validator(PG_FUNCTION_ARGS)
         UpdateCurrCompilePgObjStatus(save_curr_status);
     }
 #ifndef ENABLE_MULTIPLE_NODES
-    if (!IsInitdb && u_sess->plsql_cxt.isCreateFunction && !u_sess->plsql_cxt.running_func_oid) {
+    if (!IsInitdb && u_sess->plsql_cxt.isCreateFunction) {
         ProcInsertGsSource(funcoid, true);
     }
 #endif
-    if (!is_pkg_func && u_sess->plsql_cxt.running_func_oid == saveCallerOid) {
-        saveCallFromFuncOid(savaCallerParentOid);
-    }
 
     PG_RETURN_VOID();
 }
