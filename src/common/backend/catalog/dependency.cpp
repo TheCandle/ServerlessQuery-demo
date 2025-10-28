@@ -900,6 +900,65 @@ void findDependentObjects(const ObjectAddress* object, int flags, ObjectAddressS
     add_exact_object_address_extra(object, &extra, targetObjects);
 }
 
+/* if type is belongs to invalid view, it should not be deleted */
+static bool shouldDeletePgTypeEntry(Oid typeOid, Oid viewOid)
+{
+    if (!OidIsValid(viewOid)) {
+        return true;
+    }
+    /* array case */
+    Oid searchOid = get_element_type(typeOid);
+    if (!OidIsValid(searchOid)) {
+        /* record case */
+        searchOid = typeOid;
+    }
+
+    if (get_typ_typrelid(searchOid) == viewOid) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool shouldKeepDependView(DropBehavior behavior, const ObjectAddress* origObject)
+{
+    /*
+     * return true if drop package, no need to consider behavior, because
+     * behavior of dropping package is CASCADE defaultly.
+     */
+    if (origObject != NULL && getObjectClass(origObject) == OCLASS_PACKAGE) {
+        return true;
+    }
+
+    if (behavior != DROP_RESTRICT) {
+        return false;
+    }
+
+    if (origObject == NULL || getObjectClass(origObject) == OCLASS_CLASS ||
+        getObjectClass(origObject) == OCLASS_PROC) {
+        return true;
+    }
+
+    return false;
+}
+
+static bool isOriginDeletionObj(List* originalObjs, const ObjectAddress* obj)
+{
+    if (originalObjs == NIL) {
+        return false;
+    }
+
+    ListCell* lc = NULL;
+    foreach (lc, originalObjs) {
+        ObjectAddress* oriObj = (ObjectAddress*)lfirst(lc);
+
+        if (oriObj->classId == obj->classId && oriObj->objectId == obj->objectId) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /*
  * reportDependentObjects - report about dependencies, and fail if RESTRICT
  *
@@ -951,37 +1010,41 @@ void reportDependentObjects(
      * In restrict mode, we check targetObjects, remove object entries related to views from targetObjects,
      * and ensure that no errors are reported due to deleting table fields that have view references.
      */
-    if (behavior == DROP_RESTRICT &&
-        ((origObject != NULL && origObject->objectSubId != 0) || u_sess->attr.attr_sql.dolphin)) {
+    if (behavior == DROP_RESTRICT && (origObject == NULL || getObjectClass(origObject) == OCLASS_CLASS)) {
         ObjectAddresses* newTargetObjects = new_object_addresses();
-        const ObjectAddress* originalObj = NULL;
-        const int typeOidOffset = 2;
+        List* originalObjs = NIL;
+        Oid viewOid = InvalidOid;
         for (i = targetObjects->numrefs - 1; i >= 0; i--) {
-            const ObjectAddress* obj = &targetObjects->refs[i];
+            ObjectAddress* obj = &targetObjects->refs[i];
             const ObjectAddressExtra* extra = &targetObjects->extras[i];
             ObjectClass objClass = getObjectClass(obj);
             char relkind = get_rel_relkind(obj->objectId);
             /* record the original deletion target(s) */
             if (extra->flags & DEPFLAG_ORIGINAL) {
-                originalObj = obj;
+                originalObjs = lappend(originalObjs, obj);
             }
-            if (objClass == OCLASS_CLASS && obj == originalObj) {
+            if (objClass == OCLASS_CLASS && isOriginDeletionObj(originalObjs, obj)) {
                 add_exact_object_address_extra(obj, extra, newTargetObjects);
             } else if (objClass == OCLASS_CLASS && (relkind == RELKIND_VIEW || relkind == RELKIND_MATVIEW)) {
-                SetPgObjectValid(obj->objectId,
-                                 relkind == RELKIND_VIEW ? OBJECT_TYPE_VIEW : OBJECT_TYPE_MATVIEW, false);
-            } else if (objClass == OCLASS_TYPE && originalObj != NULL &&
-                       ((originalObj->objectId + 1) == obj->objectId ||
-                       (originalObj->objectId + typeOidOffset) == obj->objectId)) {
-                // delete pg_type entry
-                add_exact_object_address_extra(obj, extra, newTargetObjects);
-            } else if (objClass != OCLASS_REWRITE ||
-                        (u_sess->attr.attr_sql.dolphin &&
-                            originalObj != NULL && extra->dependee.objectId == originalObj->objectId)) {
+                viewOid = obj->objectId;
+                if (relkind == RELKIND_MATVIEW && is_incremental_matview(viewOid)) {
+                    /* increment matview not support */
+                    add_exact_object_address_extra(obj, extra, newTargetObjects);
+                } else {
+                    SetPgObjectValid(obj->objectId,
+                                     relkind == RELKIND_VIEW ? OBJECT_TYPE_VIEW : OBJECT_TYPE_MATVIEW, false);
+                }
+            } else if (objClass == OCLASS_TYPE) {
+                if (shouldDeletePgTypeEntry(obj->objectId, viewOid)) {
+                    // delete pg_type entry
+                    add_exact_object_address_extra(obj, extra, newTargetObjects);
+                }
+            } else if (objClass != OCLASS_REWRITE || isOriginDeletionObj(originalObjs, &extra->dependee)) {
                 // delete constraint and so on
                 add_exact_object_address_extra(obj, extra, newTargetObjects);
             }
         }
+        list_free_ext(originalObjs);
         for (j = 0; j < newTargetObjects->numrefs; j++) {
             targetObjects->refs[newTargetObjects->numrefs - j - 1] = newTargetObjects->refs[j];
             targetObjects->extras[newTargetObjects->numrefs - j - 1] = newTargetObjects->extras[j];
