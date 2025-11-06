@@ -4140,14 +4140,11 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
         /*
          * If there are indices on the result relation, open them and save
          * descriptors in the result relation info, so that we can add new
-         * index entries for the tuples we add/update.	Also,
+         * index entries for the tuples we add/update.	We need not do this	
+         * for a DELETE, however, since deletion doesn't affect indexes. Also,
          * inside an EvalPlanQual operation, the indexes might be open
          * already, since we share the resultrel state with the original
          * query.
-         *
-         * We actually need not do this for a DELETE, since deletion doesn't affect indexes,
-         * but we need to check whether there is an diable index on this relation, so we still
-         * do this.
          */
         for (int ri = 0; ri < resultRelationNum; ri++) {
             if (result_rel_info->ri_RelationDesc->rd_rel->relhasindex &&
@@ -4156,10 +4153,10 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
                 if (result_rel_info->ri_FdwRoutine == NULL || result_rel_info->ri_FdwRoutine->GetFdwType == NULL ||
                     result_rel_info->ri_FdwRoutine->GetFdwType() != MOT_ORC) {
 #endif
-                    /* don't need to check disable index if it's an explain command */
-                    ExecOpenIndices(result_rel_info, (node->upsertAction != UPSERT_NONE || node->isReplace ||
-                                    (estate->es_plannedstmt && estate->es_plannedstmt->hasIgnore)),
-                                    !(eflags & EXEC_FLAG_EXPLAIN_ONLY));
+                    if (RelationIsUstoreFormat(result_rel_info->ri_RelationDesc) || operation != CMD_DELETE) {
+                        ExecOpenIndices(result_rel_info, (node->upsertAction != UPSERT_NONE || node->isReplace ||
+                                        (estate->es_plannedstmt && estate->es_plannedstmt->hasIgnore)));
+                    }
 #ifdef ENABLE_MOT
                 }
 #endif

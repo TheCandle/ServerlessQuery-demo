@@ -72,6 +72,7 @@
 #include "access/tableam.h"
 #include "access/datavec/hnsw.h"
 #include "access/xlog.h"
+#include "access/nbtree.h"
 #include "catalog/index.h"
 #include "catalog/catalog.h"
 #include "pgstat.h"

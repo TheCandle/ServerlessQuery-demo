@@ -30,6 +30,7 @@
 #include "access/ustore/knl_uundovec.h"
 #include "commands/tablespace.h"
 #include "executor/instrument.h"
+#include "executor/executor.h"
 #include "gssignal/gs_signal.h"
 #include "mb/pg_wchar.h"
 #include "knl/knl_session.h"
