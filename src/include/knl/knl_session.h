@@ -1502,6 +1502,7 @@ typedef struct knl_u_xact_context {
     char* savePrepareGID;
 
     bool pbe_execute_complete;
+    bool commit_pending;
     List *sendSeqDbName;
     List *sendSeqSchmaName;
     List *sendSeqName;
@@ -2493,6 +2494,8 @@ typedef struct knl_u_cache_context {
 
     List* cached_membership_roles;
 
+    Oid cachedSequenceOid;
+
     struct _SPI_plan* plan_getrulebyoid;
 
     struct _SPI_plan* plan_getviewrule;
@@ -2519,6 +2522,8 @@ typedef struct knl_u_cache_context {
     bool PartRelCacheNeedEOXActWork;
 
     bool bucket_cache_need_eoxact_work; 
+
+    bool cachedSequenceOidIsAutoInc;
 
 } knl_u_cache_context;
 
@@ -2707,6 +2712,7 @@ typedef struct knl_u_fmgr_context {
 
     struct df_files_init* file_init_tail;
 
+    HTAB* cFuncHash;
 } knl_u_fmgr_context;
 
 typedef struct knl_u_erand_context {
@@ -2936,6 +2942,7 @@ typedef struct knl_u_hook_context {
     void *analyzerRoutineHook;
     void *transformStmtHook;
     void *execInitExprHook;
+    void *kernelExecInitExpr;
     void *computeHashHook;
     void *aggSmpHook;
     void *standardProcessUtilityHook;

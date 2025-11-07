@@ -1831,7 +1831,7 @@ ObjectAddress ProcedureCreate(const char* procedureName, Oid procNamespace, Oid 
      * To user-defined C_function, need rename library filename to special name,
      * Because exist concurrent to the same library, so need lock.
      */
-    AutoMutexLock libraryLock(&dlerror_lock);
+    AutoMutexLock libraryLock(&g_dllErrorLock);
 
     if (user_defined_c_fun) {
         libraryLock.lock();
@@ -2436,8 +2436,8 @@ void delete_file_handle(const char* library_path)
     DynamicFileList* file_scanner = NULL;
     DynamicFileList* pre_file_scanner = file_list;
 
-    AutoMutexLock libraryLock(&file_list_lock);
-    libraryLock.lock();
+    AutoRWLock libraryLock(&g_file_list_lock_rw);
+    libraryLock.WrLock();
 
     char* fullname = expand_dynamic_library_name(library_path);
     for (file_scanner = file_list; file_scanner != NULL; file_scanner = file_scanner->next) {
@@ -2462,7 +2462,7 @@ void delete_file_handle(const char* library_path)
         }
     }
 
-    libraryLock.unLock();
+    libraryLock.UnLock();
 }
 
 /*

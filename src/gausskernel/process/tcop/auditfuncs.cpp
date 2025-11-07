@@ -2034,7 +2034,7 @@ bool audit_check_full_audit_user()
 {
     bool is_full_audit = false;
     char* username = NULL;
-    if (u_sess->proc_cxt.MyProcPort == NULL) {
+    if (u_sess->attr.attr_security.full_audit_users[0] == '\0' || u_sess->proc_cxt.MyProcPort == NULL) {
         return is_full_audit;
     }
     if (u_sess->misc_cxt.CurrentUserName != NULL) {
@@ -2042,7 +2042,7 @@ bool audit_check_full_audit_user()
     } else {
         username = u_sess->proc_cxt.MyProcPort->user_name;
     }
-    if (strlen(u_sess->attr.attr_security.full_audit_users) == 0 || username == NULL) {
+    if (username == NULL) {
         return is_full_audit;
     }
     is_full_audit = audit_search_str(u_sess->attr.attr_security.full_audit_users, username);

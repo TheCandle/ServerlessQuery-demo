@@ -2266,9 +2266,10 @@ TupleTableSlot* ExecUpdate(ItemPointer tupleid,
 lreplace:
 
         /* acquire Form_pg_attrdef ad_on_update */
-        if (result_relation_desc->rd_att->constr && result_relation_desc->rd_att->constr->has_on_update) {
-            bool update_fix_result =  ExecComputeStoredUpdateExpr(result_rel_info, estate, slot, tuple, CMD_UPDATE, tupleid, oldPartitionOid, bucketid);
-            if (!update_fix_result) {
+        if (ExecHasDefaultUpdateExpr(result_relation_desc->rd_att)) {
+            bool updateFixResult =  ExecComputeStoredUpdateExpr(result_rel_info, estate, slot,
+                tuple, CMD_UPDATE, tupleid, oldPartitionOid, bucketid);
+            if (!updateFixResult) {
                 tuple = slot->tts_tuple;
                 /* The partition key might have been updated by on update rule. */
                 cross_partition = true;
@@ -4139,7 +4140,7 @@ ModifyTableState* ExecInitModifyTable(ModifyTable* node, EState* estate, int efl
         /*
          * If there are indices on the result relation, open them and save
          * descriptors in the result relation info, so that we can add new
-         * index entries for the tuples we add/update.	We need not do this
+         * index entries for the tuples we add/update.	We need not do this	
          * for a DELETE, however, since deletion doesn't affect indexes. Also,
          * inside an EvalPlanQual operation, the indexes might be open
          * already, since we share the resultrel state with the original

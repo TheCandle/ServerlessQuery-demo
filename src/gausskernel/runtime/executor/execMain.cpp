@@ -170,29 +170,22 @@ extern void build_backward_connection(PlannedStmt *planstmt);
  */
 static void report_iud_time(QueryDesc *query)
 {
-    ListCell *lc = NULL;
-    Oid rid;
-    if (u_sess->attr.attr_sql.enable_save_datachanged_timestamp == false) {
+    if (u_sess->attr.attr_sql.enable_save_datachanged_timestamp == false ||
+        query->estate->es_num_result_relations <= 0) {
         return;
     }
 
-    PlannedStmt *plannedstmt = query->plannedstmt;
-    if (plannedstmt->resultRelations) {
-        foreach (lc, (List*)linitial(plannedstmt->resultRelations)) {
-            Index idx = lfirst_int(lc);
-            rid = getrelid(idx, plannedstmt->rtable);
-            if (OidIsValid(rid) == false || rid < FirstNormalObjectId) {
-                continue;
+    for (int i = 0; i < query->estate->es_num_result_relations; i++) {
+        Relation rel = query->estate->es_result_relations[i].ri_RelationDesc;
+        Oid rid = rel->rd_id;
+        if (OidIsValid(rid) == false || rid < FirstNormalObjectId) {
+            continue;
+        }
+        if (rel->rd_rel->relkind == RELKIND_RELATION) {
+            if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT ||
+                rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) {
+                pgstat_report_data_changed(rid, STATFLG_RELATION, rel->rd_rel->relisshared);
             }
-            Relation rel = NULL;
-            rel = heap_open(rid, AccessShareLock);
-            if (rel->rd_rel->relkind == RELKIND_RELATION) {
-                if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT ||
-                    rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) {
-                    pgstat_report_data_changed(rid, STATFLG_RELATION, rel->rd_rel->relisshared);
-                }
-            }
-            heap_close(rel, AccessShareLock);
         }
     }
 }
@@ -2648,15 +2641,13 @@ void CheckIndexDisableValid(ResultRelInfo* result_rel_info, EState *estate)
     if (!catlist)
         return;
 
-    Relation pg_constraint;
-    pg_constraint = heap_open(ConstraintRelationId, NoLock);
     for (int i = 0; i < catlist->n_members; i++) {
         tuple = t_thrd.lsc_cxt.FetchTupleFromCatCList(catlist, i);
-        if(HeapTupleIsValid(tuple)){
+        if (likely(HeapTupleIsValid(tuple))) {
             con = (Form_pg_constraint)GETSTRUCT(tuple);
             bool isNull = true;
-            Datum datum = heap_getattr(tuple, Anum_pg_constraint_condisable, RelationGetDescr(pg_constraint), &isNull);
-            bool condisable = DatumGetBool(datum);
+            Datum datum = SysCacheGetAttr(CONSTRRELID, tuple, Anum_pg_constraint_condisable, &isNull);
+            bool condisable = !isNull && DatumGetBool(datum);
             if (con->convalidated && condisable) {
                 bool overlap = false; 
                 if (estate->es_plannedstmt->commandType == CMD_DELETE)
@@ -2685,7 +2676,6 @@ void CheckIndexDisableValid(ResultRelInfo* result_rel_info, EState *estate)
             }
         }
     }
-    heap_close(pg_constraint, NoLock);
     ReleaseSysCacheList(catlist);
 }
 

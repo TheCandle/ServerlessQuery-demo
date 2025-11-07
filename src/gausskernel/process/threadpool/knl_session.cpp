@@ -30,6 +30,7 @@
 #include "access/ustore/knl_uundovec.h"
 #include "commands/tablespace.h"
 #include "executor/instrument.h"
+#include "executor/executor.h"
 #include "gssignal/gs_signal.h"
 #include "mb/pg_wchar.h"
 #include "knl/knl_session.h"
@@ -1275,6 +1276,7 @@ static void knl_u_cache_init(knl_u_cache_context* cache_cxt)
     cache_cxt->cached_privs_roles = NIL;
     cache_cxt->cached_member_role = InvalidOid;
     cache_cxt->cached_membership_roles = NIL;
+    cache_cxt->cachedSequenceOid = InvalidOid;
 
     cache_cxt->plan_getrulebyoid = NULL;
     cache_cxt->plan_getviewrule = NULL;
@@ -1290,6 +1292,7 @@ static void knl_u_cache_init(knl_u_cache_context* cache_cxt)
     cache_cxt->PartRelCacheNeedEOXActWork = false;
     cache_cxt->PartCacheNeedEOXActWork = false;
     cache_cxt->bucket_cache_need_eoxact_work = false;
+    cache_cxt->cachedSequenceOidIsAutoInc = false;
     cache_cxt->dn_hash_table = NULL;
 }
 
@@ -1383,6 +1386,7 @@ static void knl_u_xact_init(knl_u_xact_context* xact_cxt)
     xact_cxt->savePrepareGID = NULL;
 
     xact_cxt->pbe_execute_complete = true;
+    xact_cxt->commit_pending = false;
     xact_cxt->sendSeqDbName = NULL;
     xact_cxt->sendSeqSchmaName = NULL;
     xact_cxt->sendSeqName = NULL;
@@ -1497,6 +1501,12 @@ static void knl_u_bm25_init(knl_u_bm25_context* bm25_context)
     bm25_context->scoreHashTable = nullptr;
 }
 
+static void knl_u_hook_init(knl_u_hook_context* hook_context)
+{
+    /* save the kernel addr for ExecInitExprByRecursion, in case plugin want to call back to kernel's routine */
+    hook_context->kernelExecInitExpr = (void*)ExecInitExprByRecursionInternal;
+}
+
 void knl_session_init(knl_session_context* sess_cxt)
 {
     Assert (0 != strncmp(CurrentMemoryContext->name, "ErrorContext", sizeof("ErrorContext")));
@@ -1598,6 +1608,8 @@ void knl_session_init(knl_session_context* sess_cxt)
     knl_u_clientConnTime_init(&sess_cxt->clientConnTime_cxt);
 
     knl_u_opfusion_reuse_init(&sess_cxt->opfusion_reuse_ctx);
+
+    knl_u_hook_init(&sess_cxt->hook_cxt);
 
     knl_u_bm25_init(&sess_cxt->bm25_ctx);
     knl_u_datavec_init(&sess_cxt->datavec_ctx);

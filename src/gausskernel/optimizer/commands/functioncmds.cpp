@@ -1640,13 +1640,6 @@ void libraryDoPendingDeletes(bool isCommit)
         return;
     }
 
-    /*
-     * protect process variable file_list and CFuncHash, avoid they be
-     * concurrent changed of different thread.
-     */
-    AutoMutexLock libraryLock(&dlerror_lock);
-    libraryLock.lock();
-
     ListCell* lc = NULL;
     foreach (lc, u_sess->cmd_cxt.PendingLibraryDeletes) {
         PendingLibraryDelete* del_file = (PendingLibraryDelete*)lfirst(lc);
@@ -1662,7 +1655,6 @@ void libraryDoPendingDeletes(bool isCommit)
 
     /* Reset PendingLibraryDeletes.*/
     ResetPendingLibraryDelete();
-    libraryLock.unLock();
 }
 
 /*
