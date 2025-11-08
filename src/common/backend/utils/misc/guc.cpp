@@ -508,6 +508,7 @@ static const char* show_tcp_keepalives_idle(void);
 static const char* show_tcp_keepalives_interval(void);
 static const char* show_tcp_keepalives_count(void);
 static const char* show_tcp_user_timeout(void);
+static bool check_shared_preload_libraries(char** newval, void** extra, GucSource source);
 static bool check_effective_io_concurrency(int* newval, void** extra, GucSource source);
 static void assign_effective_io_concurrency(int newval, void* extra);
 static void assign_pgstat_temp_directory(const char* newval, void* extra);
@@ -3515,10 +3516,10 @@ static void InitConfigureNamesString()
             RESOURCES_KERNEL,
             gettext_noop("Lists shared libraries to preload into server."),
             NULL,
-            GUC_LIST_INPUT | GUC_LIST_QUOTE | GUC_SUPERUSER_ONLY},
+            GUC_LIST_INPUT | GUC_SUPERUSER_ONLY},
             &g_instance.attr.attr_common.shared_preload_libraries_string,
             "security_plugin",
-            NULL,
+            check_shared_preload_libraries,
             NULL,
             NULL},
         {{"thread_pool_attr",
@@ -12208,6 +12209,29 @@ static const char* show_tcp_user_timeout(void)
     errno_t rc = snprintf_s(nbuf, maxBufLen, maxBufLen - 1, "%d", pq_gettcpusertimeout(u_sess->proc_cxt.MyProcPort));
     securec_check_ss(rc, "\0", "\0");
     return nbuf;
+}
+
+static bool check_shared_preload_libraries(char** newval, void** extra, GucSource source)
+{
+    if (IsUnderPostmaster) {
+        return true;
+    }
+    if (*newval == NULL || strlen(*newval) == 0) {
+        *newval = guc_strdup(FATAL, "security_plugin");
+        return true;
+    }
+    if (strstr(*newval, "security_plugin") != NULL) {
+        return true;
+    }
+    MemoryContext oldContext = MemoryContextSwitchTo(SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_CBB));
+    size_t total_len = strlen(*newval) + strlen(",security_plugin") + 1;
+    char* new_value = (char*)palloc(total_len);
+    int rcs = snprintf_s(new_value, total_len, total_len - 1, "%s,security_plugin", *newval);
+    securec_check_ss(rcs, "\0", "\0");
+    pfree_ext(*newval);
+    *newval = new_value;
+    MemoryContextSwitchTo(oldContext);
+    return true;
 }
 
 static bool check_effective_io_concurrency(int* newval, void** extra, GucSource source)
