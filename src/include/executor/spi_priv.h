@@ -27,6 +27,7 @@ typedef struct _SPI_connection {
     MemoryContext procCxt;         /* procedure context */
     MemoryContext execCxt;         /* executor context */
     MemoryContext savedcxt;        /* context of SPI_connect's caller */
+    MemoryContext tuptable_cxt;
     SubTransactionId connectSubid; /* ID of connecting subtransaction */
     CommandDest dest;              /* identify which is the orientated caller of spi interface, analyze or normal */
 

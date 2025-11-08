@@ -3282,6 +3282,20 @@ static void exec_exception_begin(PLpgSQL_execstate* estate, ExceptionContext *co
     context->oldTransactionId = SPI_get_top_transaction_id();
     context->stackId = u_sess->plsql_cxt.nextStackEntryId;
 
+    /* push SPI Exception TupTable stack */
+    context->old_tuptable_stack = estate->cur_tuptable_stack;
+    context->old_tuptable_cxt = u_sess->SPI_cxt._current->tuptable_cxt;
+    estate->cur_tuptable_stack++;
+    if (estate->cur_tuptable_stack >= list_length(estate->tuptable_cxt_list)) {
+        context->cur_tuptable_cxt = AllocSetContextCreate(estate->proc_ctx, "SPI Exception TupTable",
+            ALLOCSET_DEFAULT_MINSIZE, ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE);
+        estate->tuptable_cxt_list = lappend(estate->tuptable_cxt_list, context->cur_tuptable_cxt);
+    } else {
+        ListCell* lc = list_nth_cell(estate->tuptable_cxt_list, estate->cur_tuptable_stack);
+        context->cur_tuptable_cxt = (MemoryContext)lfirst(lc);
+    }
+    u_sess->SPI_cxt._current->tuptable_cxt = context->cur_tuptable_cxt;
+
     /* recording stmt's Top Portal ResourceOwner before any subtransaction. */
     if (t_thrd.utils_cxt.STPSavedResourceOwner == NULL &&
         u_sess->SPI_cxt.portal_stp_exception_counter == 0 &&
@@ -3307,6 +3321,10 @@ static void exec_exception_begin(PLpgSQL_execstate* estate, ExceptionContext *co
 static void exec_exception_end(PLpgSQL_execstate* estate, ExceptionContext *context)
 {
     context->hasReleased = true;
+
+    /* pop SPI Exception Tuptable stack */
+    estate->cur_tuptable_stack = context->old_tuptable_stack;
+    u_sess->SPI_cxt._current->tuptable_cxt = context->old_tuptable_cxt;
 
     /* Commit the exception's transaction while there is no savepoint in this block. */
     if (context->curExceptionCounter == u_sess->SPI_cxt.portal_stp_exception_counter &&
@@ -3426,6 +3444,12 @@ static void exec_exception_cleanup(PLpgSQL_execstate* estate, ExceptionContext *
 
     /* destory SPI connects created in this exception block. */
     SPI_disconnect(context->spi_connected + 1);
+
+    /* pop SPI Exception TupTable stack and clear ctx */
+    MemoryContextResetAndDeleteChildren(context->cur_tuptable_cxt);
+    estate->cur_tuptable_stack = context->old_tuptable_stack;
+    u_sess->SPI_cxt._current->tuptable_cxt = context->old_tuptable_cxt;
+    estate->eval_tuptable = NULL;
 
     /*
      * SPI_disconnect may make CurrentMemoryContext point to a context
@@ -6964,6 +6988,7 @@ static int exec_stmt_return_query(PLpgSQL_execstate* estate, PLpgSQL_stmt_return
         }
 
         SPI_freetuptable(SPI_tuptable);
+        SPI_tuptable = NULL;
     }
 
     if (tupmap != NULL) {
@@ -7586,6 +7611,8 @@ void plpgsql_estate_setup(PLpgSQL_execstate* estate, PLpgSQL_function* func, Ret
         CHECK_FOR_INTERRUPTS();
     }
     estate->proc_ctx = CurrentMemoryContext;
+    estate->tuptable_cxt_list = NIL;
+    estate->cur_tuptable_stack = -1;
 }
 
 /* ----------
@@ -7788,7 +7815,7 @@ static int exec_stmt_execsql(PLpgSQL_execstate* estate, PLpgSQL_stmt_execsql* st
     saved_cursor_data = estate->cursor_return_data;
     int saved_cursor_numbers = estate->cursor_return_numbers;
     if (stmt->row != NULL && stmt->row->nfields > 0) {
-        estate->cursor_return_data = (Cursor_Data*)palloc0(sizeof(Cursor_Data) * stmt->row->nfields);
+        estate->cursor_return_data = (Cursor_Data*)MemoryContextAlloc(estate->proc_ctx, sizeof(Cursor_Data) * stmt->row->nfields);
         estate->cursor_return_numbers = stmt->row->nfields;
         has_alloc = true;
     } else {

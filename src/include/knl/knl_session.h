@@ -193,6 +193,7 @@ typedef struct knl_u_executor_context {
     void *EventTriggerState; 
 
     bool isFlashBack;
+    bool has_equal_uservar;
 } knl_u_executor_context;
 
 typedef struct knl_u_sig_context {
@@ -462,7 +463,6 @@ typedef struct knl_u_parser_context {
     bool has_hintwarning;
     bool in_userset;
     bool has_set_uservar;
-    bool has_equal_uservar;
     bool is_straight_join;
     int cursor_expr_level;
 } knl_u_parser_context;
@@ -866,6 +866,7 @@ typedef struct knl_u_commands_context {
     bool topRelatationIsInMyTempSession;
     Node bogus_marker; /* marks conflicting defaults */
     int128 last_insert_id; /* for function last_insert_id() */
+    int128 last_autoinc_value; /* like last_insert_id, but for dolphin proto */
 } knl_u_commands_context;
 
 const int ELF_MAGIC_CACHE_LEN = 10;

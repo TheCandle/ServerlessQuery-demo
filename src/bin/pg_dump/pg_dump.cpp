@@ -18933,10 +18933,10 @@ static PQExpBuffer createTablePartition(Archive* fout, TableInfo* tbinfo)
                 "FROM pg_partition p LEFT JOIN pg_tablespace t "
                 "ON p.reltablespace = t.oid "
                 "WHERE p.parentid = '%u' AND p.parttype = '%c' "
-                "AND p.partstrategy = '%c' ORDER BY ",
+                "AND p.partstrategy in ('%c', '%c') ORDER BY ",
                 tbinfo->dobj.catId.oid,
                 PART_OBJ_TYPE_TABLE_PARTITION,
-                newStrategy);
+                newStrategy, schemaOnly ? newStrategy : partStrategy);
             for (i = 1; i <= partkeynum; i++) {
                 
                 if (!partkeyexprIsNull) {
