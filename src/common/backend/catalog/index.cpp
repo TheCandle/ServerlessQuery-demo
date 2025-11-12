@@ -1870,6 +1870,7 @@ void index_concurrently_swap(Oid newIndexId, Oid oldIndexId, const char* oldName
         if (PointerIsValid(tabentry)) {
             if (newIndexRel->pgstat_info) {
                 newIndexRel->pgstat_info->t_counts.t_numscans = tabentry->numscans;
+                newIndexRel->pgstat_info->t_counts.t_lastscan = tabentry->lastscan;
                 newIndexRel->pgstat_info->t_counts.t_tuples_returned = tabentry->tuples_returned;
                 newIndexRel->pgstat_info->t_counts.t_tuples_fetched = tabentry->tuples_fetched;
                 newIndexRel->pgstat_info->t_counts.t_blocks_fetched = tabentry->blocks_fetched;
@@ -2077,6 +2078,7 @@ void index_concurrently_part_swap(Oid newIndexPartId, Oid oldIndexPartId, const 
         if (PointerIsValid(tabentry)) {
             if (newIndexPartition->pd_pgstat_info) {
                 newIndexPartition->pd_pgstat_info->t_counts.t_numscans = tabentry->numscans;
+                newIndexPartition->pd_pgstat_info->t_counts.t_lastscan = tabentry->lastscan;
                 newIndexPartition->pd_pgstat_info->t_counts.t_tuples_returned = tabentry->tuples_returned;
                 newIndexPartition->pd_pgstat_info->t_counts.t_tuples_fetched = tabentry->tuples_fetched;
                 newIndexPartition->pd_pgstat_info->t_counts.t_blocks_fetched = tabentry->blocks_fetched;
