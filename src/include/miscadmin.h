@@ -38,6 +38,7 @@
 /*****************************************************************************
  *	  Backend version and inplace upgrade staffs
  *****************************************************************************/
+extern const uint32 UHEAP_LOCK_VERSION_NUM;
 extern const uint32 PGSTAT_LAST_SCAN_VERSION_NUM;
 extern const uint32 IDENTITY_VERSION_NUM;
 extern const uint32 PUBLICATION_DDL_AT_VERSION_NUM;
