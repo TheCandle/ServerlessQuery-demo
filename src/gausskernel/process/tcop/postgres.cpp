@@ -12825,4 +12825,5 @@ void exec_get_bind_message(StringInfo input_message, BindMessage *pqBindMessage,
     pqBindMessage->pvalue = pvalue;
     pqBindMessage->numRFormats = numRFormats;
     pqBindMessage->rformats = rformats;
+    pqBindMessage->needFormat = true;
 }

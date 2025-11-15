@@ -1757,5 +1757,21 @@ select @var_t_1 := 2;
 ERROR:  syntax error at or near ":="
 LINE 1: select @var_t_1 := 2;
                         ^
+set enable_set_variable_b_format to on;
+set @VAR1_1102053 = 123;
+select @VAR1_1102053;
+ @var1_1102053 
+---------------
+           123
+(1 row)
+
+set @VAR1_中文 = 456;
+select @VAR1_中文;
+ @var1_中文 
+------------
+        456
+(1 row)
+
+reset enable_set_variable_b_format;
 \c regression
 drop database B_db;
