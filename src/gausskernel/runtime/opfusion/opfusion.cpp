@@ -789,7 +789,9 @@ void OpFusion::updatePreAllocParamter(BindMessage* pqBindMessage, CachedPlanSour
 {
     MemoryContext old_context = CurrentMemoryContext;
     get_param_func(pqBindMessage, psrc, &m_local.m_params, t_thrd.mem_cxt.msg_mem_cxt, m_local.m_tmpContext);
-    CopyFormats(pqBindMessage->rformats, pqBindMessage->numRFormats);
+    if (pqBindMessage->needFormat) {
+        CopyFormats(pqBindMessage->rformats, pqBindMessage->numRFormats);
+    }
     m_local.m_has_init_param = true;
     MemoryContextSwitchTo(old_context);
 }

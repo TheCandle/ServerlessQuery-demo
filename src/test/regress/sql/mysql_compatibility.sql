@@ -596,6 +596,14 @@ select @var_t_1 := 2;
 
 
 
+
+set enable_set_variable_b_format to on;
+set @VAR1_1102053 = 123;
+select @VAR1_1102053;
+set @VAR1_中文 = 456;
+select @VAR1_中文;
+reset enable_set_variable_b_format;
+
 \c regression
 
 drop database B_db;
