@@ -137,7 +137,7 @@ Node* TsqlFunctionTryCast(Node* arg, TypeName* typname, int location)
     } else if (type_oid == INT8OID) {
         result = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_try_cast_floor_bigint"), list_make1(arg), location);
     } else {
-        Node* targetType = makeTypeCast(makeNullAConst(location), typname, NULL, NULL, NULL, location);
+        Node* targetType = makeTypeCast(makeNullAConst(location), typname, location);
         List* args;
 
         switch (arg->type) {
@@ -148,7 +148,7 @@ Node* TsqlFunctionTryCast(Node* arg, TypeName* typname, int location)
                 args = list_make3(arg, targetType, makeIntConst(typmod, location));
                 break;
             default:
-                args = list_make3(makeTypeCast(arg, makeTypeName("text"), NULL, NULL, NULL, location), targetType,
+                args = list_make3(makeTypeCast(arg, makeTypeName("text"), location), targetType,
                                   makeIntConst(typmod, location));
         }
 
@@ -194,24 +194,24 @@ static Node* DoTypeCast(TypeName* typname, bool is_try, Node* arg, List* args, i
     } else if (type_oid == TIMEOID) {
         helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_time"),
                                              lcons(makeIntConst(typmod, location), args), location);
-        result = makeTypeCast(helperFuncCall, typname, NULL, NULL, NULL, location);
+        result = makeTypeCast(helperFuncCall, typname, location);
     } else if (type_oid == TIMESTAMPOID) {
         helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_datetime2"),
                                              lcons(makeIntConst(typmod, location), args), location);
-        result = makeTypeCast(helperFuncCall, typname, NULL, NULL, NULL, location);
+        result = makeTypeCast(helperFuncCall, typname, location);
     } else if (type_oid == TIMESTAMPTZOID) {
         helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_datetimeoffset"),
                                              lcons(makeIntConst(typmod, location), args), location);
-        result = makeTypeCast(helperFuncCall, typname, NULL, NULL, NULL, location);
+        result = makeTypeCast(helperFuncCall, typname, location);
     } else if (type_oid == SMALLDATETIMEOID) {
         helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_smalldatetime"),
                                              lcons(makeIntConst(typmod, location), args), location);
-        result = makeTypeCast(helperFuncCall, typname, NULL, NULL, NULL, location);
+        result = makeTypeCast(helperFuncCall, typname, location);
     } else if (is_qualifed_char_type(typename_string)) {
         typename_string = format_type_extended(VARCHAROID, typmod, FORMAT_TYPE_TYPEMOD_GIVEN);
         args = lcons(makeStringConst(typename_string, typname->location), args);
         helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_varchar"), args, location);
-        result = makeTypeCast(helperFuncCall, typname, NULL, NULL, NULL, location);
+        result = makeTypeCast(helperFuncCall, typname, location);
     } else if (strcmp(typename_string, "varbinary") == 0) {
         if (typmod > VARHDRSZ) {
             helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_varbinary"),
@@ -220,12 +220,12 @@ static Node* DoTypeCast(TypeName* typname, bool is_try, Node* arg, List* args, i
             helperFuncCall = (Node*)makeFuncCall(TsqlSystemFuncName2("shark_conv_helper_to_varbinary"),
                                                  lcons(makeIntConst(typmod, location), args), location);
         }
-        result = makeTypeCast(helperFuncCall, typname, NULL, NULL, NULL, location);
+        result = makeTypeCast(helperFuncCall, typname, location);
     } else {
         if (is_try) {
             result = TsqlFunctionTryCast(arg, typname, location);
         } else {
-            result = makeTypeCast(arg, typname, NULL, NULL, NULL, location);
+            result = makeTypeCast(arg, typname, location);
         }
     }
     return result;

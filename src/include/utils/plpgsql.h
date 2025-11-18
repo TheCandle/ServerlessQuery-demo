@@ -2158,6 +2158,7 @@ extern void compute_return_type(
     TypeDependExtend* type_depend_extend, bool is_refresh_head, bool isPipelined);
 extern CodeLine* debug_show_code_worker(Oid funcid, uint32* num, int* headerlines);
 void plpgsql_free_override_stack(int depth);
+bool CheckPlpgsqlFunc(Oid funcoid, bool report_error = true);
 
 /* gsplsql lock/unlock api */
 typedef struct GSPLSQLLockedObjKey {

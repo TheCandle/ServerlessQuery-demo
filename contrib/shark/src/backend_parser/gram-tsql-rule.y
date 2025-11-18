@@ -459,12 +459,7 @@ tsql_subprogram_body:        {
                                 rc = CompileWhich();
                                 int     tok = YYEMPTY;
                                 int     pre_tok = 0;
-                                int in_procedure = 0;
-                                int max_proc_level = 0;
-                                bool in_begin = false;
                                 base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
-                                int as_count = 0;
-                                int procedure_count = 0;
 
                                 yyextra->core_yy_extra.in_slash_proc_body = true;
                                 if (u_sess->parser_cxt.eaten_begin)
@@ -494,24 +489,14 @@ tsql_subprogram_body:        {
                                                 parser_yyerror("subprogram body is not ended correctly");
                                                 break;
                                         }
-                                        if (!in_begin && (pre_tok == ';' || pre_tok == DECLARE || pre_tok == 0 || pre_tok == COMMENTSTRING
-                                                || pre_tok == AS || pre_tok == IS) && (tok == PROCEDURE || tok == FUNCTION)) {
-                                                in_procedure++;
-                                                max_proc_level = max_proc_level > in_procedure ? max_proc_level : in_procedure;
-                                                procedure_count++;
-                                        }
                                         if (tok == BEGIN_P) {
                                                 pre_tok = tok;
                                                 tok = YYLEX;
                                                 if (tok != TRY && tok != CATCH) {
                                                     blocklevel++;
-                                                    in_begin = true;
                                                 } else {
                                                     continue;
                                                 }
-                                        }
-                                        if (tok == AS || tok == IS) {
-                                                as_count++;
                                         }
                                         if (tok == END_P)
                                         {
@@ -526,7 +511,7 @@ tsql_subprogram_body:        {
                                                         && tok != TRY
                                                         && tok != CATCH)
                                                 {
-                                                        if (u_sess->attr.attr_sql.sql_compatibility == A_FORMAT && blocklevel == 1 && pre_tok == ';' && as_count == 0 && procedure_count ==0)
+                                                        if (u_sess->attr.attr_sql.sql_compatibility == A_FORMAT && blocklevel == 1 && pre_tok == ';')
                                                         {
                                                                 proc_e = yylloc;
                                                                 break;
@@ -560,15 +545,7 @@ tsql_subprogram_body:        {
                                                                         yyextra->lookahead_len = 1;
                                                                 }
                                                         }
-                                                        if(in_procedure == 0)
-                                                                break;
-                                                        else {
-                                                                blocklevel--;
-                                                                in_procedure--;
-                                                                if ((procedure_count - as_count - 1) == in_procedure) {
-                                                                        break;
-                                                                }
-                                                        }
+                                                        break;
                                                 }
 
                                                 if (blocklevel > 1
@@ -577,21 +554,14 @@ tsql_subprogram_body:        {
                                                 {
                                                         blocklevel--;
                                                 }
-                                                in_begin = false;
                                         }
 
                                         pre_tok = tok;
                                         tok = YYLEX;
-
                                 }
 
                                 if (proc_e == 0) {
                                         ereport(errstate, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("subprogram body is not ended correctly")));
-                                }
-                                if (max_proc_level > 0) {
-                                        u_sess->parser_cxt.has_subprogram = true;
-                                } else {
-                                        u_sess->parser_cxt.has_subprogram = false;
                                 }
 
                                 proc_body_len = proc_e - proc_b + 1 ;
@@ -1487,32 +1457,7 @@ func_expr_common_subexpr:
 			| TSQL_CAST '(' a_expr AS Typename ')'
 				{
 					add_default_typmod($5);
-					$$ = makeTypeCast($3, $5, NULL, NULL, NULL, @1);
-				}
-			| TSQL_CAST '(' a_expr AS Typename opt_default_fmt_clause')'
-				{
-					add_default_typmod($5);
-					$$ = makeTypeCast($3, $5, $6, NULL, NULL, @1);
-				}
-			| TSQL_CAST '(' a_expr AS Typename opt_default_fmt_clause opt_default_nls_clause ')'
-				{
-					add_default_typmod($5);
-					$$ = makeTypeCast($3, $5, $6, $7, NULL, @1);
-				}
-			| TSQL_CAST '(' a_expr AS Typename default_on_err_expr opt_default_fmt_clause ')'
-				{
-					add_default_typmod($5);
-					$$ = makeTypeCast($3, $5, $7, NULL, $6, @1);
-				}
-			| TSQL_CAST '(' a_expr AS Typename default_on_err_expr opt_default_fmt_clause opt_default_nls_clause ')'
-				{
-					add_default_typmod($5);
-					$$ = makeTypeCast($3, $5, $7, $8, $6, @1);
-				}
-			| TSQL_CAST '(' a_expr AS Typename default_on_err_expr ')'
-				{
-					add_default_typmod($5);
-					$$ = makeTypeCast($3, $5, NULL, NULL, $6, @1);
+					$$ = makeTypeCast($3, $5, @1);
 				}
 		;
 

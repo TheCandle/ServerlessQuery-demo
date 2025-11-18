@@ -1,5 +1,6 @@
 EXTENSION = shark
 MODULE_big = shark
+BASECODEDIR=src
 BEPARSERDIR=src/backend_parser
 PLDIR=src/pltsql
 

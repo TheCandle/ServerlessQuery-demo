@@ -742,11 +742,11 @@ PGFunction lookup_C_func_by_oid(Oid fn_oid, char* probinstring, char* prosrcstri
     CFunInfo c_fn;
 
     /* Lookup hash table CFuncHash If Functions are already cached */
-    if (CFuncHash != NULL) {
+    if (u_sess->fmgr_cxt.cFuncHash != NULL) {
         CFuncHashTabEntry *entry;
 
         entry = (CFuncHashTabEntry *)
-            hash_search(CFuncHash,
+            hash_search(u_sess->fmgr_cxt.cFuncHash,
                         &fn_oid,
                         HASH_FIND,
                         NULL);
