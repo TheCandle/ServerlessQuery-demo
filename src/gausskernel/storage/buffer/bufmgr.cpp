@@ -2635,6 +2635,11 @@ Buffer ReadBuffer_common(SMgrRelation smgr, char relpersistence, ForkNumber fork
         }
     }
 
+    if (ENABLE_DMS && AmDmsProcess() && !dms_drc_accessible((uint8)DRC_RES_PAGE_TYPE) &&
+        t_thrd.dms_cxt.in_ondemand_redo && bufHdr == NULL) {
+        return InvalidBuffer;
+    }
+
 found_branch:
     /* At this point we do NOT hold any locks.
      *
@@ -2759,6 +2764,13 @@ found_branch:
                     if (LWLockHeldByMe(bufHdr->io_in_progress_lock)) {
                         TerminateBufferIO(bufHdr, false, 0);
                     }
+
+                    if (AmDmsProcess() && !dms_drc_accessible((uint8)DRC_RES_PAGE_TYPE) &&
+                        t_thrd.dms_cxt.in_ondemand_redo) {
+                        SSUnPinBuffer(bufHdr);
+                        return InvalidBuffer;
+                    }
+
                     pg_usleep(5000L);
                     continue;
                 }
@@ -3109,6 +3121,11 @@ retry:
             MarkReadPblk(buf->buf_id, pblk);
         }
 
+        return buf;
+    }
+
+    if (ENABLE_DMS && AmDmsProcess() && !dms_drc_accessible((uint8)DRC_RES_PAGE_TYPE) &&
+        t_thrd.dms_cxt.in_ondemand_redo) {
         return buf;
     }
 
