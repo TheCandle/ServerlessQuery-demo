@@ -400,19 +400,14 @@ NOTICE:  The nolock option is currently ignored
 (0 rows)
 
 select * from t1 a  asof join t2 b (nolock) on a.col1 = b.col1; --d database error because asof
-NOTICE:  The nolock option is currently ignored
- col1 | col2 | col3 | col4 | col5 | col1 | col2 | col3 | col4 | col5 
-------+------+------+------+------+------+------+------+------+------
-(0 rows)
-
+ERROR:  syntax error at or near "asof"
+LINE 1: select * from t1 a  asof join t2 b (nolock) on a.col1 = b.co...
+                            ^
 select * from t1 a  natural join t3 c (nolock) cross apply t4 d (nolock) outer apply t5 e (nolock); --d database error because natural
 NOTICE:  The nolock option is currently ignored
-NOTICE:  The nolock option is currently ignored
-NOTICE:  The nolock option is currently ignored
- col1 | col2 | col3 | col4 | col5 | col1 | col2 | col3 | col4 | col5 | col1 | col2 | col3 | col4 | col5 
-------+------+------+------+------+------+------+------+------+------+------+------+------+------+------
-(0 rows)
-
+ERROR:  syntax error at or near "apply"
+LINE 1: ...ect * from t1 a  natural join t3 c (nolock) cross apply t4 d...
+                                                             ^
 select * from t1 a full join t5 e (nolock) on a.col4 = e.col4; --ok
 NOTICE:  The nolock option is currently ignored
  col1 | col2 | col3 | col4 | col5 | col1 | col2 | col3 | col4 | col5 

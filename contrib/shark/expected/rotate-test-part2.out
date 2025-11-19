@@ -343,20 +343,9 @@ FROM t_not_rotate0001_01
 not rotate (
 sales FOR Quarter IN (Q1_Sales, Q2_Sales, Q3_Sales, Q4_Sales)
 ) AS UnpivotTable;
- product | quarter |  sales  
----------+---------+---------
- Laptop  |     123 | 1000.00
- Phone   |     123 |  800.00
- Laptop  |     123 | 1500.00
- Phone   |     123 |  900.00
- Tablet  |     123 |  500.00
- Laptop  |     123 | 1200.00
- Phone   |     123 |  950.00
- Laptop  |     123 | 1800.00
- Phone   |     123 | 1100.00
- Tablet  |     123 |  700.00
-(10 rows)
-
+ERROR:  syntax error at or near "Quarter"
+LINE 1: SELECT Product, 123Quarter, sales
+                           ^
 SELECT Product, 123Quarter, sales
 FROM (
 SELECT Product, Q1_Sales, Q2_Sales, Q3_Sales, Q4_Sales
@@ -365,20 +354,9 @@ FROM t_not_rotate0001_01
 not rotate (
 sales FOR Quarter IN (Q1_Sales, Q2_Sales, Q3_Sales, Q4_Sales)
 ) AS UnpivotTable;
- product | quarter |  sales  
----------+---------+---------
- Laptop  |     123 | 1000.00
- Phone   |     123 |  800.00
- Laptop  |     123 | 1500.00
- Phone   |     123 |  900.00
- Tablet  |     123 |  500.00
- Laptop  |     123 | 1200.00
- Phone   |     123 |  950.00
- Laptop  |     123 | 1800.00
- Phone   |     123 | 1100.00
- Tablet  |     123 |  700.00
-(10 rows)
-
+ERROR:  syntax error at or near "Quarter"
+LINE 1: SELECT Product, 123Quarter, sales
+                           ^
 SELECT Product, Quarter, 123sales
 FROM (
 SELECT Product, Q1_Sales, Q2_Sales, Q3_Sales, Q4_Sales

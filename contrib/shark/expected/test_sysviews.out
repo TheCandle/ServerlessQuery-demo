@@ -871,6 +871,9 @@ order by object_id;
 
 -- disable index
 alter index t_index_func_c4_ind disable;
+ERROR:  syntax error at or near ";"
+LINE 1: alter index t_index_func_c4_ind disable;
+                                               ^
 select t.relname, name, i.type, type_desc, is_disabled
 from sys.indexes i
 inner join pg_class t on i.object_id = t.oid
@@ -878,7 +881,7 @@ inner join pg_namespace s on t.relnamespace = s.oid
 where s.nspname = 'sys_view_test' and name = 't_index_func_c4_ind';
  relname |        name         | type |  type_desc   | is_disabled 
 ---------+---------------------+------+--------------+-------------
- t_index | t_index_func_c4_ind | 2    | NONCLUSTERED | 1
+ t_index | t_index_func_c4_ind | 2    | NONCLUSTERED | 0
 (1 row)
 
 drop procedure test_sum;
