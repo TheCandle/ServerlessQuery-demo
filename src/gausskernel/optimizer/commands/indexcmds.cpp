@@ -19,6 +19,7 @@
 #include "knl/knl_variable.h"
 
 #include "access/cstore_delta.h"
+#include "access/nbtree.h"
 #include "access/reloptions.h"
 #include "access/tableam.h"
 #include "access/xact.h"
@@ -100,6 +101,8 @@ static void prepareReindexTableConcurrently(Oid relationOid, Oid relationPartOid
 static void prepareReindexIndexConcurrently(Oid relationOid, Oid relationPartOid, List** rt_heapRelationIds,
     List** rt_heapPartitionIds, List** rt_indexIds, List** rt_indexPartIds, MemoryContext private_context);
 static bool ReindexRelationConcurrently(Oid relationOid, Oid relationPartOid, AdaptMem* memInfo = NULL, bool dbWide = false);
+static List* check_d_database_index_options(List* defList);
+static List* remove_d_database_index_options(List *defList);
 static bool columnIsExist(Relation rel, const Form_pg_attribute attTup, const List* indexParams);
 static bool relationHasInformationalPrimaryKey(const Relation conrel);
 static void handleErrMsgForInfoCnstrnt(const IndexStmt* stmt, const Relation rel);
@@ -1309,6 +1312,8 @@ ObjectAddress DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, 
     if (stmt->whereClause)
         CheckPredicate((Expr*)stmt->whereClause);
 
+    stmt->options = check_d_database_index_options(stmt->options);
+
     if (RelationIsUstoreFormat(rel)) {
         DefElem* def = makeDefElem("storage_type", (Node*)makeString(TABLE_ACCESS_METHOD_USTORE_LOWER));
         if (stmt->options == NULL) {
@@ -2115,6 +2120,65 @@ ObjectAddress DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, 
     UnlockRelationIdForSession(&heaprelid, ShareUpdateExclusiveLock);
 
     return address;
+}
+
+/*
+ * check d databse index options
+ */
+static List* check_d_database_index_options(List *defList)
+{
+    if (!DB_IS_CMPT(D_FORMAT)) {
+        return defList;
+    }
+
+    Datum index_reloptions;
+    int numoptions;
+
+    index_reloptions = transformRelOptions((Datum)0, defList, NULL, NULL, false, false);
+    parseRelOptions(index_reloptions, true, RELOPT_KIND_D_INDEX, &numoptions);
+    return remove_d_database_index_options(defList);
+}
+
+/*
+ * remove d database index options, only syntax compatible, except fillfactor option
+ */
+static List* remove_d_database_index_options(List *defList)
+{
+    ListCell *cell = NULL;
+    List *to_delete = NIL;
+    int i;
+
+    foreach (cell, defList) {
+        DefElem* defElem = (DefElem*)lfirst(cell);
+        for (i = 0; t_thrd.relopt_cxt.relOpts[i]; i++) {
+            if (!(t_thrd.relopt_cxt.relOpts[i]->kinds & RELOPT_KIND_D_INDEX)) {
+                continue;
+            }
+            if (pg_strcasecmp(defElem->defname, t_thrd.relopt_cxt.relOpts[i]->name) != 0) {
+                continue;
+            }
+            if (pg_strcasecmp(defElem->defname, "fillfactor") == 0) {
+                int fillfactor = intVal(defElem->arg);
+                if (D_DATABASE_MIN_FILLFACTOR <= fillfactor && fillfactor < A_DATABASE_MIN_FILLFACTOR) {
+                    ((Value *) defElem->arg)->val.ival = A_DATABASE_MIN_FILLFACTOR;
+                    ereport(NOTICE, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        errmsg("parameter fillfactor will be set to 10 when it is less than 10.")));
+                }
+            } else {
+                to_delete = lappend(to_delete, defElem);
+                ereport(NOTICE, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                    errmsg("parameter \"%s\" is currently ignored.", defElem->defname)));
+            }
+        }
+    }
+
+    foreach (cell, to_delete) {
+        DefElem* defElem = (DefElem*)lfirst(cell);
+        defList = list_delete(defList, defElem);
+    }
+
+    list_free(to_delete);
+    return defList;
 }
 
 /*

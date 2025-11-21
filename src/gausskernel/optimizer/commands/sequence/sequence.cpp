@@ -31,6 +31,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_object.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_attrdef.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
@@ -76,13 +77,13 @@ static ObjectAddress AlterSequence(const AlterSeqStmt* stmt);
 #ifdef PGXC
 template<typename T_Form, typename T_Int, bool large>
 static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* newm_p, List** owned_by,
-    bool* is_restart, bool* need_seq_rewrite);
+    bool* is_restart, bool* needSeqRewrite, bool isIdentity);
 #else
 static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* newm_p, List** owned_by,
-    bool* need_seq_rewrite);
+    bool* needSeqRewrite, bool isIdentity);
 #endif
 template<typename T_Form, typename T_Int, bool large>
-static void do_setval(Oid relid, int128 next, bool iscalled);
+static void do_setval(Oid relid, int128 next, bool iscalled, bool skip_perm_check = false);
 static void process_owned_by(const Relation seqrel, List* owned_by);
 template<typename T_Form>
 static GTM_UUID get_uuid_from_tuple(const void* seq_p, const Relation rel, const HeapTuple seqtuple);
@@ -668,6 +669,30 @@ static int128 GetNextvalLocal(SeqTable elm, Relation seqrel)
     return result;
 }
 
+
+template<typename T_Int, typename T_Form, bool large>
+static T_Int GetLastAndIncrementValue(SeqTable elm, Relation seqrel, T_Int* increment_by)
+{
+    Buffer buf;
+    Page page;
+    HeapTupleData seqtuple;
+    T_Form seq;
+    GTM_UUID uuid;
+    T_Int last_value;
+
+    /* lock page' buffer and read tuple */
+    seq = read_seq_tuple<T_Form>(elm, seqrel, &buf, &seqtuple, &uuid);
+    page = BufferGetPage(buf);
+
+    AssignInt<T_Int, large>(&last_value, (int128)seq->last_value);
+    AssignInt<T_Int, large>(increment_by, (int128)seq->increment_by);
+
+    UnlockReleaseBuffer(buf);
+    
+    return last_value;
+}
+
+
 template<typename T_Int>
 static bool FetchNOverMaxBound(T_Int maxv, T_Int next, T_Int incby)
 {
@@ -888,22 +913,23 @@ static ObjectAddress DefineSequence(CreateSeqStmt* seq)
             (errcode(ERRCODE_DATA_CORRUPTED), errmsg("Invaild UUID for CREATE SEQUENCE %s.", seq->sequence->relname)));
 #endif
 
+    bool isIdentity = StrEndWith(seq->sequence->relname, "_seq_identity");
     /* Check and set all option values */
 #ifdef PGXC
     if (large) {
         init_params<Form_pg_large_sequence, int128, true>(seq->options, true, isUseLocalSeq, &newm, &owned_by,
-            &is_restart, &need_seq_rewrite);
+            &is_restart, &need_seq_rewrite, isIdentity);
     } else {
         init_params<Form_pg_sequence, int64, false>(seq->options, true, isUseLocalSeq, &newm, &owned_by,
-            &is_restart, &need_seq_rewrite);
+            &is_restart, &need_seq_rewrite, isIdentity);
     }
 #else
     if (large) {
         init_params<Form_pg_large_sequence, int128, true>(seq->options, true, isUseLocalSeq, &newm, &owned_by,
-            &need_seq_rewrite);
+            &need_seq_rewrite, isIdentity);
     } else {
         init_params<Form_pg_sequence, int64, false>(seq->options, true, isUseLocalSeq, &newm, &owned_by,
-            &need_seq_rewrite);
+            &need_seq_rewrite, isIdentity);
     }
 #endif
     /*
@@ -1215,6 +1241,7 @@ static ObjectAddress AlterSequence(const AlterSeqStmt* stmt)
 #endif
     bool need_seq_rewrite = false;
     ObjectAddress address;
+    bool isIdentity = false;
 
     /* Open and lock sequence. */
     relid = RangeVarGetRelid(stmt->sequence, ShareRowExclusiveLock, stmt->missing_ok);
@@ -1259,13 +1286,15 @@ static ObjectAddress AlterSequence(const AlterSeqStmt* stmt)
 
     newm = (T_Form)GETSTRUCT(tuple);
 
+    isIdentity = StrEndWith(RelationGetRelationName(seqrel), "_seq_identity");
+
     /* Check and set new values */
 #ifdef PGXC
     init_params<T_Form, T_Int, large>(stmt->options, false, isUseLocalSeq, newm, &owned_by,
-        &is_restart, &need_seq_rewrite);
+        &is_restart, &need_seq_rewrite, isIdentity);
 #else
     init_params<T_Form, T_Int, large>(stmt->options, false, isUseLocalSeq, newm, &owned_by,
-        &need_seq_rewrite);
+        &need_seq_rewrite, isIdentity);
 #endif
 #ifdef PGXC /* PGXC_COORD */
     /*
@@ -1465,6 +1494,7 @@ int128 nextval_internal(Oid relid)
     Relation seqrel;
     int128 result;
     bool is_use_local_seq = false;
+    char* relname = NULL;
 
     if (t_thrd.postmaster_cxt.HaShmData->current_mode == STANDBY_MODE) {
         ereport(ERROR, (errmsg("Standby do not support nextval, please do it in primary!")));
@@ -1496,7 +1526,10 @@ int128 nextval_internal(Oid relid)
         elm->last += elm->increment;
         char* buf_last = DatumGetCString(DirectFunctionCall1(int16out, Int128GetDatum(elm->last)));
         char* buf_cached = DatumGetCString(DirectFunctionCall1(int16out, Int128GetDatum(elm->cached)));
-
+        if (u_sess->hook_cxt.invokeNextvalHook && (relname = get_rel_name(relid)) != NULL &&
+            StrEndWith(relname, "_seq_identity")) {
+            ((InvokeNextvalHookType)(u_sess->hook_cxt.invokeNextvalHook))(elm->relid, elm->last);
+        }
         ereport(DEBUG2,
             (errmodule(MOD_SEQ),
                 (errmsg("Sequence %s retrun ID %s from cache, the cached is %s, ",
@@ -1524,6 +1557,10 @@ int128 nextval_internal(Oid relid)
     }
 
     u_sess->cmd_cxt.last_used_seq = elm;
+    if (u_sess->hook_cxt.invokeNextvalHook && (relname = get_rel_name(relid)) != NULL &&
+        StrEndWith(relname, "_seq_identity")) {
+        ((InvokeNextvalHookType)(u_sess->hook_cxt.invokeNextvalHook))(elm->relid, result);
+    }
     char* buf = DatumGetCString(DirectFunctionCall1(int16out, Int128GetDatum(result)));
     ereport(DEBUG2,
         (errmodule(MOD_SEQ),
@@ -1745,7 +1782,7 @@ int128 autoinc_get_nextval(Oid relid)
  * sequence.
  */
 template<typename T_Form, typename T_Int, bool large>
-static void do_setval(Oid relid, int128 next, bool iscalled)
+static void do_setval(Oid relid, int128 next, bool iscalled, bool skip_perm_check)
 {
     SeqTable elm = NULL;
     Relation seqrel;
@@ -1765,7 +1802,7 @@ static void do_setval(Oid relid, int128 next, bool iscalled)
 
     TrForbidAccessRbObject(RelationRelationId, relid, RelationGetRelationName(seqrel));
 
-    if (pg_class_aclcheck(elm->relid, GetUserId(), ACL_UPDATE) != ACLCHECK_OK)
+    if (!skip_perm_check && pg_class_aclcheck(elm->relid, GetUserId(), ACL_UPDATE) != ACLCHECK_OK)
         ereport(ERROR,
             (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
                 errmsg("permission denied for sequence %s", RelationGetRelationName(seqrel))));
@@ -2116,6 +2153,7 @@ enum {
     DEF_IDX_MIN_VALUE,
     DEF_IDX_CACHE_VALUE,
     DEF_IDX_IS_CYCLED,
+    DEF_IDX_TYPE_ID,
     DEF_IDX_NUM
 };
 
@@ -2165,9 +2203,42 @@ static void PreProcessSequenceOptions(
         } else if (strcmp(defel->defname, "owned_by") == 0) {
             CheckDuplicateDef(*owned_by);
             *owned_by = defGetQualifiedName(defel);
+        } else if (strcmp(defel->defname, "as") == 0) {
+            CheckDuplicateDef(elms[DEF_IDX_TYPE_ID]);
+            elms[DEF_IDX_TYPE_ID] = defel;
+            *need_seq_rewrite = true;
         } else {
             ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("option \"%s\" not recognized", defel->defname)));
         }
+    }
+}
+
+template<typename T_Form, bool large>
+static void ProcessSequenceOptAsType(DefElem* elm, T_Form newm, bool isInit,
+    bool isIdentity, Oid &type_id, int &typeMods)
+{
+    if (isIdentity) {
+        if (elm != NULL) {
+            Oid newtypid = typenameTypeId(NULL, defGetTypeName(elm));
+            type_id = newtypid;
+
+            if (nodeTag(elm->arg) == T_TypeName) {
+                TypeName* typname = (TypeName*)elm->arg;
+                typeMods = typname->typemod;
+            }
+
+            if (typeMods > DMODE_MAX_PRECISION) {
+                ereport(ERROR,
+                        (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                         errmsg("Specified column precision %d is greater than the maximum precision of %d.",
+                             typeMods, DMODE_MAX_PRECISION)));
+            }
+        }
+    } else {
+        if (!large)
+            type_id = INT8OID;
+        else
+            type_id = INT16OID;
     }
 }
 
@@ -2298,6 +2369,77 @@ static void CrossCheckMinMax(T_Int min, T_Int max)
     }
 }
 
+template<typename T_Int, bool large>
+static bool CheckSeedIncrementValueMinMax(T_Int value, T_Int min_value, T_Int max_value)
+{
+    if (value < min_value || value > max_value) {
+        return false;
+    }
+    return true;
+}
+
+template<typename T_Form, typename T_Int, bool large>
+static void ProcessSequenceOptMaxMin(DefElem* elm, T_Form newm, bool isInit, Oid type_id, int typeMods)
+{
+    if (elm != NULL && elm->arg) {
+        int maxValue = defGetInt<T_Int, large>(elm);
+        if (maxValue == SEQ_MAXVALUE_8) {
+            AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_8);
+            AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE_8);
+        } else if (maxValue == SEQ_MAXVALUE_16) {
+            AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_16);
+            AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE_16);
+        } else if (maxValue == SEQ_MAXVALUE_32) {
+            AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_32);
+            AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE_32);
+        } else if (maxValue == SEQ_MAXVALUE) {
+            AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE);
+            AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE);
+        } else {
+            int128 minValue = maxValue * (int128)-1 - (int128)1;
+            AssignInt<T_Int, large>(&(newm->max_value), maxValue);
+            AssignInt<T_Int, large>(&(newm->min_value), minValue);
+        }
+        newm->log_cnt = 0;
+    } else if (isInit || elm != NULL) {
+        /* ascending seq */
+        if (large) {
+            if (typeMods == -1)
+                typeMods = DMODE_DEFAULT_PRECISION;
+            int128 maxDecimalNum = 9;
+            int128 minDecimalNum = -1;
+            int maxSigDigit = 9;
+            int base = 10;
+            for (int i = 1; i < typeMods; i++) {
+                maxDecimalNum = maxDecimalNum * base + maxSigDigit;
+            }
+            minDecimalNum = maxDecimalNum * (int128)-1 - (int128)1;
+            if (type_id == INT8OID) {
+                AssignInt<T_Int, large>(&(newm->max_value), LARGE_SEQ_MAXVALUE);
+                AssignInt<T_Int, large>(&(newm->min_value), LARGE_SEQ_MINVALUE);
+            } else {
+                AssignInt<T_Int, large>(&(newm->max_value), maxDecimalNum);
+                AssignInt<T_Int, large>(&(newm->min_value), minDecimalNum);
+            }
+        } else {
+            if (type_id == INT1OID) {
+                AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_8);
+                AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE_8);
+            } else if (type_id == INT2OID) {
+                AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_16);
+                AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE_16);
+            } else if (type_id == INT4OID) {
+                AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE_32);
+                AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE_32);
+            } else {
+                AssignInt<T_Int, large>(&(newm->max_value), SEQ_MAXVALUE);
+                AssignInt<T_Int, large>(&(newm->min_value), SEQ_MINVALUE);
+            }
+        }
+        newm->log_cnt = 0;
+    }
+}
+
 /*
  * init_params: process the options list of CREATE or ALTER SEQUENCE,
  * and store the values into appropriate fields of *new.  Also set
@@ -2317,15 +2459,16 @@ static void CrossCheckMinMax(T_Int min, T_Int max)
 #ifdef PGXC
 template<typename T_Form, typename T_Int, bool large>
 static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* newm_p, List** owned_by,
-    bool* is_restart, bool* need_seq_rewrite)
+    bool* is_restart, bool* needSeqRewrite, bool isIdentity)
 #else
 template<typename T_Form, typename T_Int, bool large>
 static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* newm_p, List** owned_by,
-    bool* need_seq_rewrite)
+    bool* needSeqRewrite, bool isIdentity)
 #endif
 {
     T_Form newm = (T_Form)newm_p;
     DefElem* elms[DEF_IDX_NUM] = {0};
+    Oid type_id = InvalidOid;
 
 #ifdef PGXC
     *is_restart = false;
@@ -2333,7 +2476,7 @@ static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* ne
 
     *owned_by = NIL;
 
-    PreProcessSequenceOptions(options, elms, owned_by, need_seq_rewrite, isInit);
+    PreProcessSequenceOptions(options, elms, owned_by, needSeqRewrite, isInit);
 
     /*
      * We must reset log_cnt when isInit or when changing any parameters
@@ -2343,10 +2486,17 @@ static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* ne
         newm->log_cnt = 0;
     }
 
+    int typeMods = -1;
+
+    ProcessSequenceOptAsType<T_Form, large>(elms[DEF_IDX_TYPE_ID], newm, isInit, isIdentity, type_id, typeMods);
     ProcessSequenceOptIncrementBy<T_Form, T_Int, large>(elms[DEF_IDX_INCREMENT_BY], newm, isInit);
     ProcessSequenceOptCycle<T_Form>(elms[DEF_IDX_IS_CYCLED], newm, isInit);
-    ProcessSequenceOptMax<T_Form, T_Int, large>(elms[DEF_IDX_MAX_VALUE], newm, isInit);
-    ProcessSequenceOptMin<T_Form, T_Int, large>(elms[DEF_IDX_MIN_VALUE], newm, isInit);
+    if (u_sess->attr.attr_sql.sql_compatibility == D_FORMAT && isIdentity) {
+        ProcessSequenceOptMaxMin<T_Form, T_Int, large>(elms[DEF_IDX_MAX_VALUE], newm, isInit, type_id, typeMods);
+    } else {
+        ProcessSequenceOptMax<T_Form, T_Int, large>(elms[DEF_IDX_MAX_VALUE], newm, isInit);
+        ProcessSequenceOptMin<T_Form, T_Int, large>(elms[DEF_IDX_MIN_VALUE], newm, isInit);
+    }
 
     /* crosscheck min/max */
     CrossCheckMinMax<T_Int, large>(newm->min_value, newm->max_value);
@@ -2354,7 +2504,20 @@ static void init_params(List* options, bool isInit, bool isUseLocalSeq, void* ne
     ProcessSequenceOptStartWith<T_Form, T_Int, large>(elms[DEF_IDX_START_VALUE], newm, isInit);
 
     /* crosscheck START */
-    CheckValueMinMax<T_Int, large>(newm->start_value, newm->min_value, newm->max_value, true);
+    if (u_sess->attr.attr_sql.sql_compatibility == D_FORMAT && isIdentity) {
+        if (!CheckSeedIncrementValueMinMax<T_Int, large>(newm->start_value, newm->min_value, newm->max_value)) {
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("Identity column contains invalid SEED.")));
+        }
+        if (!CheckSeedIncrementValueMinMax<T_Int, large>(newm->increment_by, newm->min_value, newm->max_value)) {
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("Identity column contains invalid INCREMENT.")));
+        }
+    } else {
+        CheckValueMinMax<T_Int, large>(newm->start_value, newm->min_value, newm->max_value, true);
+    }
 
     ProcessSequenceOptReStartWith<T_Form, T_Int, large>(
         elms[DEF_IDX_RESTART_VALUE], newm, isInit, is_restart, isUseLocalSeq);
@@ -3108,4 +3271,249 @@ static char* Int8or16Out(T_Int num)
         ret = DatumGetCString(DirectFunctionCall1(int8out, num));
     }
     return ret;
+}
+
+template<typename T_Int, bool large>
+T_Int GetColumnMaxOrMinValue(char* column_name, char* full_table_name, bool is_min)
+{
+    T_Int current_max_value = 0;
+    char max_value_sql[FULL_TABLE_NAME_MAX_LENGTH] = {0};
+    errno_t rc = EOK;
+    const char* target_type = large ? "int16" : "int8";
+    const char* agg_func_name = is_min ? "min" : "max";
+    int ret = 0;
+    bool isnull = false;
+
+    rc = snprintf_s(max_value_sql, FULL_TABLE_NAME_MAX_LENGTH, FULL_TABLE_NAME_MAX_LENGTH - 1,
+                    "select %s(%s)::%s from %s;", agg_func_name, column_name, target_type, full_table_name);
+    securec_check_ss(rc, "", "");
+
+    ereport(DEBUG5, (errcode(MOD_SEQ), errmsg("get current max value sql is \"%s\"", max_value_sql)));
+    if (SPI_OK_CONNECT != SPI_connect()) {
+        ereport(ERROR,
+            (errcode(ERRCODE_SPI_CONNECTION_FAILURE),
+                errmsg("Unable to connect to execute internal select max value.")));
+    }
+    ret = SPI_execute(max_value_sql, true, 1);
+    if (ret < 0) {
+        ereport(ERROR,
+            (errcode(ERRCODE_SPI_EXECUTE_FAILURE),
+                errmsg("Call SPI_execute execute interval select max value failed.")));
+    }
+
+    if (SPI_processed != 1) {
+        ereport(ERROR,
+            (errcode(ERRCODE_SPI_EXECUTE_FAILURE),
+                errmsg("execute select max value but result is invalid.")));
+    }
+
+    Datum res = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull);
+    if (isnull) {
+        ereport(ERROR,
+            (errcode(ERRCODE_SPI_EXECUTE_FAILURE),
+                errmsg("execute select max value but result is null.")));
+    } else {
+        if (large) {
+            current_max_value = DatumGetInt128(res);
+        } else {
+            current_max_value = DatumGetInt64(res);
+        }
+    }
+    SPI_finish();
+    return current_max_value;
+}
+
+
+static inline void free_relation_resource(SysScanDesc adscan, Relation adrel, Relation rel)
+{
+    systable_endscan(adscan);
+    heap_close(adrel, AccessShareLock);
+    relation_close(rel, AccessShareLock);
+}
+
+
+static inline void check_relation_valid(Relation rel, char* table_name)
+{
+    if (rel->rd_rel->relkind != RELKIND_RELATION) {
+        relation_close(rel, AccessShareLock);
+        ereport(ERROR, (errcode(ERRCODE_UNDEFINED_TABLE), errmsg("relation \"%s\" does not exist", table_name)));
+    }
+
+    if (rel->rd_att->constr == NULL || rel->rd_att->constr->num_defval < 1) {
+        relation_close(rel, AccessShareLock);
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("cannot not found the serial column for relation \"%s\"", table_name)));
+    }
+}
+
+static Oid adbin_to_relid(char* adbin)
+{
+    Oid seqoid = InvalidOid;
+    if (adbin == NULL || adbin[0] == '\0') {
+        return InvalidOid;
+    }
+    Node* expr = (Node*)stringToNode(adbin);
+    if (!IsA(expr, FuncExpr)) {
+        return InvalidOid ;
+    }
+    find_nextval_seqoid_walker(expr, &seqoid);
+
+    return seqoid;
+}
+
+char* get_serial_column_and_seq_table(List* range_var, char* table_name, Oid* seq_table_oid, AclMode perm_required)
+{
+    Relation rel = NULL;
+    ScanKeyData skey;
+    HeapTuple htup;
+    char* serial_column_name = NULL;
+    Oid seqoid = InvalidOid;
+
+    rel = HeapOpenrvExtended(makeRangeVarFromNameList(range_var), AccessShareLock, false, true);
+    check_relation_valid(rel, table_name);
+
+    if (pg_class_aclcheck(rel->rd_id, GetUserId(), perm_required, false) != ACLCHECK_OK) {
+        relation_close(rel, AccessShareLock);
+        ereport(ERROR,
+            (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+                errmsg("permission denied for sequence %s", RelationGetRelationName(rel))));
+    }
+
+    ScanKeyInit(&skey, Anum_pg_attrdef_adrelid, BTEqualStrategyNumber, F_OIDEQ,
+                ObjectIdGetDatum(RelationGetRelid(rel)));
+    Relation adrel = heap_open(AttrDefaultRelationId, AccessShareLock);
+    SysScanDesc adscan = systable_beginscan(adrel, AttrDefaultIndexId, true, NULL, 1, &skey);
+    
+    while (HeapTupleIsValid(htup = systable_getnext(adscan))) {
+        Datum val;
+        bool isnull = false;
+        Datum adnum;
+
+        val = fastgetattr(htup, Anum_pg_attrdef_adbin, adrel->rd_att, &isnull);
+        if (isnull) {
+            continue;
+        }
+        
+        char* adbin_str = TextDatumGetCString(val);
+        Oid seqoid_temp = adbin_to_relid(adbin_str);
+        if (OidIsValid(seqoid_temp) && OidIsValid(seqoid)) {
+            free_relation_resource(adscan, adrel, rel);
+            ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("more than one serial in relation \"%s\"", table_name)));
+        }
+        if (!OidIsValid(seqoid_temp) && !OidIsValid(seqoid)) {
+            continue;
+        }
+        if (OidIsValid(seqoid_temp) && !OidIsValid(seqoid)) {
+            seqoid = seqoid_temp;
+            adnum = fastgetattr(htup, Anum_pg_attrdef_adnum, adrel->rd_att, &isnull);
+            int16 adnum_int16 = DatumGetInt16(adnum) - 1;
+            if (adnum_int16 < 0) {
+                free_relation_resource(adscan, adrel, rel);
+                ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("adnum is not defined in pg_attrdef")));
+            }
+            serial_column_name =  pstrdup(NameStr(rel->rd_att->attrs[adnum_int16].attname));
+        }
+    }
+
+    if (!OidIsValid(seqoid) || serial_column_name == NULL) {
+        free_relation_resource(adscan, adrel, rel);
+        ereport(ERROR, (errcode(ERRCODE_UNDEFINED_TABLE),
+                errmsg("cannot not found the serial table for relation \"%s\"", table_name)));
+    }
+
+    free_relation_resource(adscan, adrel, rel);
+    *seq_table_oid = seqoid;
+    return serial_column_name;
+}
+
+
+void get_last_value_and_max_value(text* txt, int128* last_value, int128* current_max_value)
+{
+    int128 increasement_by = 0;
+    Oid relid = 0;
+    SeqTable elm = NULL;
+    Relation seqrel;
+    char* serial_column_name = NULL;
+    char relkind;
+    char* table_name = TextDatumGetCString(txt);
+    List* range_var = textToQualifiedNameList(txt);
+
+    serial_column_name = get_serial_column_and_seq_table(range_var, table_name, &relid, ACL_SELECT);
+
+    /* open and lock sequence */
+    init_sequence(relid, &elm, &seqrel);
+    relkind = RelationGetRelkind(seqrel);
+    if (relkind == RELKIND_SEQUENCE) {
+        *last_value = GetLastAndIncrementValue<int128, Form_pg_sequence, true>(elm, seqrel, &increasement_by);
+    } else {
+        *last_value = GetLastAndIncrementValue<int128, Form_pg_large_sequence, true>(elm, seqrel, &increasement_by);
+    }
+    relation_close(seqrel, NoLock);
+
+    /* get current max value by execute select max (xx) from xxx */
+    bool is_min = increasement_by < 0 ? true : false;
+    *current_max_value = GetColumnMaxOrMinValue<int128, true>(serial_column_name, table_name, is_min);
+
+    pfree(serial_column_name);
+    pfree(table_name);
+    list_free(range_var);
+}
+
+
+int128 get_and_reset_last_value(text* txt, int128 new_value, bool need_reseed)
+{
+    int128 last_value = 0;
+    Oid relid = 0;
+    int128 increasement_by = 0;
+    SeqTable elm = NULL;
+    Relation seqrel;
+    char* serial_column_name = NULL;
+    char relkind;
+
+    List* range_var = textToQualifiedNameList(txt);
+    char* table_name = TextDatumGetCString(txt);
+
+    serial_column_name = get_serial_column_and_seq_table(range_var, table_name, &relid, ACL_UPDATE);
+
+    /* open and lock sequence */
+    init_sequence(relid, &elm, &seqrel);
+    relkind = RelationGetRelkind(seqrel);
+    if (relkind == RELKIND_SEQUENCE) {
+        last_value = GetLastAndIncrementValue<int128, Form_pg_sequence, true>(elm, seqrel, &increasement_by);
+    } else {
+        last_value = GetLastAndIncrementValue<int128, Form_pg_large_sequence, true>(elm, seqrel, &increasement_by);
+    }
+    relation_close(seqrel, NoLock);
+
+    // set new reseed
+    if (need_reseed) {
+        if (relkind == RELKIND_SEQUENCE) {
+            do_setval<Form_pg_sequence, int64, false>(relid, new_value, true, true);
+        } else {
+            do_setval<Form_pg_large_sequence, int128, true>(relid, new_value, true, true);
+        }
+    }
+
+    pfree(serial_column_name);
+    pfree(table_name);
+    list_free(range_var);
+
+    return last_value;
+}
+
+bool StrEndWith(const char *str, const char *suffix)
+{
+    int strLen = strlen(str);
+    int suffixLen = strlen(suffix);
+    if (strLen < suffixLen) {
+        return false;
+    }
+    for (int i = 0; i < suffixLen; i++) {
+        if (str[strLen - 1 - i] != suffix[suffixLen - 1 - i]) {
+            return false;
+        }
+    }
+    return true;
 }

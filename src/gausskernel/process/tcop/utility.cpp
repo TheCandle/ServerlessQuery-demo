@@ -1606,13 +1606,18 @@ void ProcessUtility(processutility_context* processutility_cxt,
      * Record the number of rows affected into the session, but only support 
      * DML statement now, for DDL statement, always set to 0
      */
-    if(nodeTag(processutility_cxt->parse_tree) != T_ExecuteStmt) {
+    NodeTag nt = nodeTag(processutility_cxt->parse_tree);
+    if (nt != T_ExecuteStmt) {
         u_sess->statement_cxt.current_row_count = 0;
         u_sess->statement_cxt.last_row_count = u_sess->statement_cxt.current_row_count;
-        /* If it is an EXECUTE statement here, the PortalRun function will be
+        /* If it is an EXECUTE/FETCH statement here, the PortalRun function will be
            called twice nested, and the right data will be modified when it is 
            first executed (Generally in function ExecutorRun), so there do 
            nothing when it is called again to avoid overwriting */
+        if ((nt != T_FetchStmt || ((FetchStmt*)(processutility_cxt->parse_tree))->ismove) &&
+            u_sess->hook_cxt.rowcountHook) {
+            ((RowcountHook)(u_sess->hook_cxt.rowcountHook))(0);
+        }
     }
 }
 
@@ -2699,11 +2704,25 @@ void standard_ProcessUtility(processutility_context* processutility_cxt,
         case T_TransactionStmt: {
             TransactionStmt* stmt = (TransactionStmt*)parse_tree;
 
+            if (IsTransactionInState(IN_TRY) && stmt->kind != TRANS_STMT_END_TRY_BEGIN_CATCH) {
+                ereport(ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        (errmsg("current in a try block, only END TRY BEGIN CATCH can be entered to end the try block."))));
+            }
+
+            if (IsTransactionInState(IN_CATCH) && stmt->kind != TRANS_STMT_END_CATCH) {
+                ereport(ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        (errmsg("currently in a catch block, only END CATCH can be entered to end the catch block."))));
+            }
+
             switch (stmt->kind) {
                     /*
                      * START TRANSACTION, as defined by SQL99: Identical
                      * to BEGIN.  Same code for both.
                      */
+                case TRANS_STMT_BEGIN_TRY:
+                    TransactionBeginTry();
                 case TRANS_STMT_BEGIN:
                 case TRANS_STMT_START: {
                     if (stmt->with_snapshot) {
@@ -2723,6 +2742,11 @@ void standard_ProcessUtility(processutility_context* processutility_cxt,
                     u_sess->need_report_top_xid = true;
                 } break;
 
+                case TRANS_STMT_END_TRY_BEGIN_CATCH:
+                    TransactionEndTryBeginCatch();
+                    break;
+                case TRANS_STMT_END_CATCH:
+                    TransactionEndCatch();
                 case TRANS_STMT_COMMIT:
                     /* Only generate one time when u_sess->debug_query_id = 0 in CN */
                     if ((IS_SINGLE_NODE || IS_PGXC_COORDINATOR) && u_sess->debug_query_id == 0) {
@@ -6371,7 +6395,8 @@ ProcessUtilitySlow(Node *parse_tree,
                 break;
 
             case T_CreatePLangStmt:
-                if (!IsInitdb && strncmp(((CreatePLangStmt*)parse_tree)->plname, "plpython", strlen("plpython")) != 0)
+                if (!IsInitdb && strncmp(((CreatePLangStmt*)parse_tree)->plname, "plpython", strlen("plpython")) != 0 &&
+                    strncmp(((CreatePLangStmt*)parse_tree)->plname, "pltsql", strlen("pltsql")) != 0)
                     ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("new language is not yet supported.")));
                 address = CreateProceduralLanguage((CreatePLangStmt*)parse_tree);
 #ifdef PGXC
@@ -8659,6 +8684,18 @@ const char* CreateCommandTag(Node* parse_tree)
 
                 case TRANS_STMT_ROLLBACK_PREPARED:
                     tag = "ROLLBACK PREPARED";
+                    break;
+
+                case TRANS_STMT_BEGIN_TRY:
+                    tag = "BEGIN TRY";
+                    break;
+
+                case TRANS_STMT_END_TRY_BEGIN_CATCH:
+                    tag = "END TRY BEGIN CATCH";
+                    break;
+
+                case TRANS_STMT_END_CATCH:
+                    tag = "END CATCH";
                     break;
 
                 default:

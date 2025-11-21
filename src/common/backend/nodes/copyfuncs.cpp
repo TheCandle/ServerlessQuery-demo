@@ -4113,6 +4113,7 @@ static A_Const* _copyAConst(const A_Const* from)
         case T_Float:
         case T_String:
         case T_BitString:
+        case T_TSQL_HexString:
             COPY_STRING_FIELD(val.val.str);
             break;
         case T_Null:
@@ -7042,6 +7043,7 @@ static Value* _copyValue(const Value* from)
         case T_Float:
         case T_String:
         case T_BitString:
+        case T_TSQL_HexString:
             COPY_STRING_FIELD(val.str);
             break;
         case T_Null:
@@ -8486,6 +8488,7 @@ void* copyObject(const void* from)
         case T_Float:
         case T_String:
         case T_BitString:
+        case T_TSQL_HexString:
         case T_Null:
             retval = _copyValue((Value*)from);
             break;

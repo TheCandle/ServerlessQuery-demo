@@ -39,6 +39,7 @@
 #include "gs_ledger/ledger_utils.h"
 #include "mb/pg_wchar.h"
 #include "parser/parse_utilcmd.h"
+#include "commands/sequence.h"
 
 static void markTargetListOrigin(ParseState* pstate, TargetEntry* tle, Var* var, int levelsup);
 static Node* transformAssignmentIndirection(ParseState* pstate, Node* basenode, const char* targetName,
@@ -55,6 +56,7 @@ static List* ExpandRowReference(ParseState* pstate, Node* expr, bool targetlist)
 static int FigureColnameInternal(Node* node, char** name);
 
 extern void checkArrayTypeInsert(ParseState* pstate, Expr* expr);
+extern Oid pg_get_serial_sequence_internal(Oid tableOid, AttrNumber attnum, bool find_identity, char** out_seq_name);
 
 /*
  * @Description: return the last filed's name and ignore * or subscrpts
@@ -407,7 +409,7 @@ Expr* transformAssignedExpr(ParseState* pstate, Expr* expr, ParseExprKind exprKi
     attrtype = attnumTypeId(rd, attrno);
     attrtypmod = rd->rd_att->attrs[attrno - 1].atttypmod;
     attrcollation = rd->rd_att->attrs[attrno - 1].attcollation;
-    if (DB_IS_CMPT(B_FORMAT) && OidIsValid(attrcollation)) {
+    if (DB_IS_CMPT_BD && OidIsValid(attrcollation)) {
         attrcharset = get_valid_charset_by_collation(attrcollation);
     }
 
@@ -915,6 +917,12 @@ List* checkInsertTargets(ParseState* pstate, List* cols, List** attrnos)
             if (is_blockchain_rel && strcmp(col->name, "hash") == 0) {
                 continue;
             }
+            /* skip the identity default value in D format */
+            if (DB_IS_CMPT(D_FORMAT) && OidIsValid(pg_get_serial_sequence_internal(RelationGetRelid(targetrel),
+                                                                                   attr[i].attnum, true, NULL))) {
+                continue;
+            }
+
             col->indirection = NIL;
             col->val = NULL;
             col->location = -1;

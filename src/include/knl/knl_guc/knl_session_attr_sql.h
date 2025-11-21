@@ -109,6 +109,7 @@ typedef struct knl_session_attr_sql {
     bool enable_autoanalyze;
     bool SQL_inheritance;
     bool Transform_null_equals;
+    bool ansi_nulls;
     bool check_function_bodies;
     bool Array_nulls;
     bool default_with_oids;
@@ -201,6 +202,7 @@ typedef struct knl_session_attr_sql {
     char* default_storage_nodegroup;
     char* inlist2join_optmode;
     char* b_format_behavior_compat_string;
+    char* d_format_behavior_compat_string;
     char* behavior_compat_string;
     char* plsql_compile_behavior_compat_string;
     char* disable_keyword_string;
@@ -269,6 +271,7 @@ typedef struct knl_session_attr_sql {
     bool enable_custom_parser;
     bool dolphin;
     bool whale;
+    bool shark;
     bool enable_vector_targetlist;
     bool enable_default_local_index;
 #endif

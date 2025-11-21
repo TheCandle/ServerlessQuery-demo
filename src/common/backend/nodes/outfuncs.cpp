@@ -2468,6 +2468,9 @@ static void _outConst(StringInfo str, Const* node)
          */
         if (type_is_set(node->consttype)) {
             _outDatum(str, node->constvalue, node->constlen, node->constbyval);
+        } else if (TSQL_HAS_VARBINARY &&
+                   (node->consttype == TSQL_VARBINARY_OID)) {
+            _outDatum(str, node->constvalue, node->constlen, node->constbyval);
         } else {
             /*
              * For user-define type
@@ -5542,6 +5545,10 @@ static void _outValue(StringInfo str, Value* value)
             break;
         case T_BitString:
             /* internal representation already has leading 'b' */
+            appendStringInfoString(str, value->val.str);
+            break;
+        case T_TSQL_HexString:
+            /* internal representation already has leading '0x' */
             appendStringInfoString(str, value->val.str);
             break;
         case T_Null:

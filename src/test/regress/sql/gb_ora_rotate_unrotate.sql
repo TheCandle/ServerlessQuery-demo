@@ -269,3 +269,76 @@ select year as yy, order_mode as mode, yearly_total as total from rotate_orders 
 select year as yy, yearly_total as total from rotate_orders not rotate (yearly_total for order_mode in (internet as 'online', store as 'direct'));
 select year as yy, order_mode as mode, yearly_total as total from rotate_orders not rotate include nulls (yearly_total for order_mode in (internet as 'online', store as 'direct')) where yearly_total is not null order by yy desc;
 drop table rotate_orders;
+
+SELECT a as sale1, 2 as sale2 not rotate (uuu For sale IN ("sale1", sale2, sale3, sale4)) order by sale;
+
+
+CREATE TABLE sales2 (  
+    year INT,  
+    product VARCHAR(50),  
+    amount DECIMAL(10, 2),
+	sale1 int,
+	sale2 int,
+	sale3 int,
+	sale4 int,
+	"sale5" int,
+	"SALE5" int
+);  
+
+INSERT INTO sales2 (year, product, amount, sale1, sale2, sale3, sale4, "sale5", "SALE5") VALUES (2020, 'A', 100, 1, 1, 1, 1, 1, 11);
+INSERT INTO sales2 (year, product, amount, sale1, sale2, sale3, sale4, "sale5", "SALE5") VALUES (2020, 'B', 200, 2, 2, 2, 2, 2, 12);
+INSERT INTO sales2 (year, product, amount, sale1, sale2, sale3, sale4, "sale5", "SALE5") VALUES (2021, 'A', 150, 3, 3, 3, 3, 3, 13);  
+INSERT INTO sales2 (year, product, amount, sale1, sale2, sale3, sale4, "sale5", "SALE5") VALUES (2021, 'B', 250, 4, 4, 4, 4, 4, 14);
+INSERT INTO sales2 (year, product, amount, sale1, sale2, sale3, sale4, "sale5", "SALE5") VALUES (2022, 'C', 250, 5, 5, 5, 5, 5, 15);
+
+SELECT * FROM sales2 not rotate (sale_all For sale IN ("sale5", "SALE5")) order by 1, 2, 3, 4, 5, 6;
+drop table sales2;
+
+
+CREATE TABLE t_pivot0001 (
+    Product   VARCHAR(50),
+    Quarter   CHAR(2),
+    sales     DECIMAL(10,2)
+);
+
+INSERT INTO t_pivot0001 VALUES
+    ('Laptop', 'Q1', 1000.00),
+    ('Laptop', 'Q2', 1500.00),
+    ('Phone',  'Q1', 800.00),
+    ('Phone',  'Q3', 2000.00),
+    ('Tablet', 'Q4', 500.00);
+select * from t_pivot0001;
+
+SELECT Product, Q1, Q2, Q3, Q4
+FROM (
+    SELECT Product, Quarter, sales
+    FROM t_pivot0001
+) AS SourceTable
+rotate (
+    SUM(sales)
+    FOR Quarter IN ('Q1', 'Q2', 'Q3', 'Q4')
+);
+
+SELECT Product, Q1, Q2, Q3, Q4
+FROM (
+    SELECT Product, Quarter, sales
+    FROM t_pivot0001
+) AS SourceTable
+rotate (
+    SUM(sales)
+    FOR Quarter IN ('Q1' as "Q1", 'Q2', 'Q3', 'Q4')
+);
+
+
+SELECT Product, "Q1", Q2, Q3, Q4
+FROM (
+    SELECT Product, Quarter, sales
+    FROM t_pivot0001
+) AS SourceTable
+rotate (
+    SUM(sales)
+    FOR Quarter IN ('Q1' as "Q1", 'Q2', 'Q3', 'Q4')
+);
+
+drop table t_pivot0001;
+

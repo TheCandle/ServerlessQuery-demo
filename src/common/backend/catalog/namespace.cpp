@@ -3822,7 +3822,9 @@ OverrideSearchPath* GetOverrideSearchPath(MemoryContext context)
         if (linitial_oid(schemas) == u_sess->catalog_cxt.myTempNamespace)
             result->addTemp = true;
         else {
-            if (linitial_oid(schemas) != PG_CATALOG_NAMESPACE) {
+            /* sys comes before pg_catalog when D-format db create extensoin "shark" */
+            if (linitial_oid(schemas) != PG_CATALOG_NAMESPACE && (!DB_IS_CMPT(D_FORMAT) ||
+                linitial_oid(schemas) != get_namespace_oid(SYS_NAMESPACE_NAME, true))) {
                 ValidateNamespace(linitial_oid(schemas));
             }
             result->addCatalog = true;
@@ -3874,10 +3876,34 @@ bool OverrideSearchPathMatchesCurrent(OverrideSearchPath* path)
     }
     /* If path->addCatalog, next item should be pg_catalog. */
     if (path->addCatalog) {
-        if (lc != NULL && lfirst_oid(lc) == PG_CATALOG_NAMESPACE)
+        if (DB_IS_CMPT(D_FORMAT)) {
+            /*
+            * D-format db regards sys, pg_catalog together as system namespace.
+            * Even though set search_path to pg_catalog, path->addCatalog will be true,
+            * because pg_catalog is not equal to sys firstly.
+            */
+            Oid sys_oid = get_namespace_oid(SYS_NAMESPACE_NAME, true);
+            if (OidIsValid(sys_oid) && lc && lfirst_oid(lc) == sys_oid) {
+                /* skip sys */
+                lc = lnext(lc);
+            } else if (OidIsValid(sys_oid)) {
+                return false;
+            }
+            /*
+             * if set search_path to pg_catalog, we shouldn't skip.
+             */
+            if (u_sess->catalog_cxt.activeCreationNamespace != PG_CATALOG_NAMESPACE) {
+                if (lc != NULL && lfirst_oid(lc) == PG_CATALOG_NAMESPACE) {
+                    lc = lnext(lc);
+                } else {
+                    return false;
+                }
+            }
+        } else if (lc != NULL && lfirst_oid(lc) == PG_CATALOG_NAMESPACE) {
             lc = lnext(lc);
-        else
+        } else {
             return false;
+        }
     }
     /* We should now be looking at the activeCreationNamespace. */
     if (u_sess->catalog_cxt.activeCreationNamespace != ((lc != NULL) ? lfirst_oid(lc) : InvalidOid))
@@ -3939,8 +3965,15 @@ void PushOverrideSearchPath(OverrideSearchPath* newpath, bool inProcedure)
      * the front, not the back; also notice that we do not check USAGE
      * permissions for these.
      */
-    if (newpath->addCatalog)
+    if (newpath->addCatalog) {
         oidlist = lcons_oid(PG_CATALOG_NAMESPACE, oidlist);
+        if (DB_IS_CMPT(D_FORMAT)) {
+            Oid sys_oid = get_namespace_oid(SYS_NAMESPACE_NAME, true);
+            if (OidIsValid(sys_oid) && !list_member_oid(oidlist, sys_oid)) {
+                oidlist = lcons_oid(sys_oid, oidlist);
+            }
+        }
+    }
 
     if (newpath->addTemp && OidIsValid(u_sess->catalog_cxt.myTempNamespace))
         oidlist = lcons_oid(u_sess->catalog_cxt.myTempNamespace, oidlist);
@@ -4435,7 +4468,11 @@ void recomputeNamespacePath(StringInfo error_info)
                         appendStringInfo(error_info, "; permission denied for schema %s", curname);
                 }
             } else if (!list_member_oid(oidlist, namespaceId)) {
-                if (namespaceId != PG_CATALOG_NAMESPACE)
+                /* pg_catalog should be the first one, will be added later.
+                 * sys should be the first one for D-format db.
+                 */
+                if (namespaceId != PG_CATALOG_NAMESPACE &&
+                    (!DB_IS_CMPT(D_FORMAT) || namespaceId != get_namespace_oid(SYS_NAMESPACE_NAME, true)))
                     oidlist = lappend_oid(oidlist, namespaceId);
                 if (firstOid == InvalidOid)
                     firstOid = namespaceId;
@@ -4460,6 +4497,13 @@ void recomputeNamespacePath(StringInfo error_info)
      * stored procedures.
      */
     oidlist = lcons_oid(PG_CATALOG_NAMESPACE, oidlist);
+
+    if (DB_IS_CMPT(D_FORMAT)) {
+        Oid sys_oid = get_namespace_oid(SYS_NAMESPACE_NAME, true);
+        if (OidIsValid(sys_oid) && !list_member_oid(oidlist, sys_oid)) {
+            oidlist = lcons_oid(sys_oid, oidlist);
+        }
+    }
 
     if (OidIsValid(u_sess->catalog_cxt.myTempNamespace))
         oidlist = lcons_oid(u_sess->catalog_cxt.myTempNamespace, oidlist);

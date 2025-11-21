@@ -106,7 +106,8 @@ DB_CompatibilityAttr g_dbCompatArray[] = {
     {DB_CMPT_A, "A"},
     {DB_CMPT_B, "B"},
     {DB_CMPT_C, "C"},
-    {DB_CMPT_PG, "PG"}
+    {DB_CMPT_PG, "PG"},
+	{DB_CMPT_D, "D"}
 };
 
 IntervalStylePack g_interStyleVal = {"a"};
@@ -295,6 +296,12 @@ static void CheckUserHostIsValid();
 static void setDelimiterName(core_yyscan_t yyscanner, char*input, VariableSetStmt*n);
 static Node* MakeNoArgFunctionCall(List* funcName, int location);
 static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
+static List* TransformToConstStrNode(List *inExprList, char* raw_str);
+static Alias* generate_alias(Alias* clone_target, const char* default_alias_name);
+static void Funcname_Judge(List *names, List *args);
+
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-prologue.y.h"*/
 %}
 
 %define api.pure
@@ -678,6 +685,7 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
 %type <defelt>	copy_generic_opt_elem
 %type <list>	copy_generic_opt_list copy_generic_opt_arg_list
 %type <list>	copy_options
+%type <node>    rotate_table unrotate_table
 
 %type <typnam>	Typename SimpleTypename ConstTypename
 				GenericType Numeric opt_float
@@ -874,6 +882,9 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
 %token <ival>	ICONST PARAM
 %token			TYPECAST ORA_JOINOP DOT_DOT COLON_EQUALS PARA_EQUALS SET_IDENT_SESSION SET_IDENT_GLOBAL
 
+%token          DIALECT_TSQL
+%token <str>	TSQL_XCONST
+
 /*
  * If you want to make any keyword changes, update the keyword table in
  * src/include/parser/kwlist.h and add new keywords to the appropriate one
@@ -1065,6 +1076,8 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
  */
 %nonassoc	UNBOUNDED		/* ideally should have same precedence as IDENT */
 %nonassoc	IDENT GENERATED NULL_P PARTITION SUBPARTITION RANGE ROWS PRECEDING FOLLOWING CUBE ROLLUP
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-nonassoc-ident-tokens"*/
 %left		Op OPERATOR '@'		/* multi-character ops and user-defined operators */
 %nonassoc	NOTNULL
 %nonassoc	ISNULL
@@ -1092,6 +1105,10 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner);
 %left		JOIN CROSS LEFT FULL RIGHT INNER_P NATURAL ENCRYPTED
 /* kluge to keep xml_whitespace_option from causing shift/reduce conflicts */
 %right		PRESERVE STRIP_P
+
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-decl.y"*/
+
 %%
 
 /*
@@ -2153,6 +2170,7 @@ CreateSchemaStmt:
 					n->authid = NULL;
 					n->hasBlockChain = $7;
 					n->schemaElts = $8;
+					n->charset = PG_INVALID_ENCODING;
 					$$ = (Node *)n;
 				}
 			| CREATE SCHEMA IF_P NOT EXISTS OptSchemaName AUTHORIZATION RoleId OptBlockchainWith OptSchemaEltList
@@ -2167,6 +2185,7 @@ CreateSchemaStmt:
 					n->authid = $8;
 					n->hasBlockChain = $9;
 					n->schemaElts = $10;
+					n->charset = PG_INVALID_ENCODING;
 					$$ = (Node *)n;
 				}
 			| CREATE SCHEMA ColId CharsetCollate
@@ -2178,6 +2197,17 @@ CreateSchemaStmt:
 					n->schemaElts = NULL;
 					n->charset = $4->charset;
 					n->collate = $4->collate;
+					$$ = (Node *)n;
+				}
+			| CREATE SCHEMA IF_P NOT EXISTS ColId CharsetCollate
+				{
+					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
+					n->schemaname = $6;
+					n->authid = NULL;
+					n->hasBlockChain = false;
+					n->schemaElts = NULL;
+					n->charset = $7->charset;
+					n->collate = $7->collate;
 					$$ = (Node *)n;
 				}
 		;
@@ -15145,9 +15175,9 @@ collate:
 					errmsg("Un-support feature"),
 					errdetail(specifying character sets and collations is not yet supported)));
 #endif
-				if (u_sess->attr.attr_sql.sql_compatibility != B_FORMAT) {
+				if (!DB_IS_CMPT_BD) {
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("specifying character sets and collations is supported only in B-format database")));
+						errmsg("specifying character sets and collations is supported only in B-format or D-format database")));
 				}
 				$$ = $3;
 			}
@@ -23360,11 +23390,11 @@ UpdateStmt: opt_with_clause UPDATE hint_string from_list_for_no_table_function
 								     parser_errposition(@4)));
 					}
 #else
-					if (u_sess->attr.attr_sql.sql_compatibility != B_FORMAT) {
+					if (!DB_IS_CMPT_BD) {
 						if (list_length($4) > 1) {
 							ereport(errstate, 
 									(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									 errmsg("multi-relation update only support in B-format database")));
+									 errmsg("multi-relation update only support in B-format or D-format database")));
 						}
 						if (!IsA(linitial($4), RangeVar)) {
 							ereport(errstate,
@@ -23920,7 +23950,7 @@ select_clause:
  */
 simple_select:
 			SELECT hint_string opt_distinct target_list
-			opt_into_clause from_clause unrotate_clause where_clause start_with_clause
+			opt_into_clause from_clause where_clause start_with_clause
 			group_clause having_clause window_clause
 				{
 					SelectStmt *n = makeNode(SelectStmt);
@@ -23928,12 +23958,11 @@ simple_select:
 					n->targetList = $4;
 					n->intoClause = $5;
 					n->fromClause = $6;
-					n->unrotateInfo = $7;
-					n->whereClause = $8;
-					n->startWithClause = $9;
-					n->groupClause = $10;
-					n->havingClause = $11;
-					n->windowClause = $12;
+					n->whereClause = $7;
+					n->startWithClause = $8;
+					n->groupClause = $9;
+					n->havingClause = $10;	
+					n->windowClause = $11;
 					n->hintState = create_hintstate($2);
 					n->hasPlus = getOperatorPlusFlag();
 					$$ = (Node *)n;
@@ -24758,6 +24787,7 @@ table_ref:
 			n->coldeflist = $4;
 			$$ = (Node *) n;
 		}
+	;
 
 /*
  * table_ref is where an alias clause can be attached.	Note we cannot make
@@ -25054,7 +25084,26 @@ table_ref_for_no_table_function:	relation_expr		%prec UMINUS
 					n->alias = $2;
 					$$ = (Node *) n;
 				}
-			| select_with_parens opt_alias_clause rotate_clause
+			| joined_table
+				{
+					$$ = (Node *) $1;
+				}
+			| '(' joined_table ')' alias_clause
+				{
+					$2->alias = $4;
+					$$ = (Node *) $2;
+				}
+			| rotate_table
+				{
+					$$ = (Node *) $1;
+				}
+			| unrotate_table
+				{
+					$$ = (Node *) $1;
+				}
+		;
+
+rotate_table: select_with_parens opt_alias_clause rotate_clause
 				{
 					RangeSubselect *n = makeNode(RangeSubselect);
 					n->lateral = false;
@@ -25084,16 +25133,107 @@ table_ref_for_no_table_function:	relation_expr		%prec UMINUS
 					n->rotate = $3;
 					$$ = (Node *) n;
 				}
-			| joined_table
-				{
-					$$ = (Node *) $1;
-				}
-			| '(' joined_table ')' alias_clause
-				{
-					$2->alias = $4;
-					$$ = (Node *) $2;
-				}
-		;
+			;
+
+unrotate_table:
+	relation_expr unrotate_clause
+		{
+			SelectStmt *s = (SelectStmt *)make_AStar_subquery($1);
+			s->unrotateInfo = $2;
+
+            RangeSubselect *n = makeNode(RangeSubselect);
+			n->lateral = false;
+			n->subquery = (Node*)s;
+			n->alias = generate_alias($2->alias, "not_rotate_as_internal_t");
+			$$ = (Node *) n;
+		}
+	| relation_expr opt_alias_clause unrotate_clause
+		{
+			RangeSubselect *n = makeNode(RangeSubselect);
+			n->lateral = false;
+
+			SelectStmt *subquery_node = (SelectStmt *)make_AStar_subquery($1);
+			subquery_node->unrotateInfo = $3;
+			n->subquery = (Node*)subquery_node;
+			n->alias = generate_alias($3->alias, "not_rotate_as_internal_t");
+			$$ = (Node *) n;
+		}		
+	| select_with_parens opt_alias_clause unrotate_clause
+		{
+			if (!IsA($1, SelectStmt)) {
+				ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("VALUES in FROM must have an alias")));
+			}
+			SelectStmt* s1 = (SelectStmt*)$1;
+
+			RangeSubselect *rsubselect = makeNode(RangeSubselect);
+			rsubselect->subquery = (Node*)s1;
+			rsubselect->alias = generate_alias($3->alias, "not_rotate_as_internal_t");
+			SelectStmt *s2 = makeNode(SelectStmt);
+			ColumnRef *col = makeNode (ColumnRef);
+			col->fields = list_make1(makeNode(A_Star));
+			col->indnum = 0;
+
+			ResTarget *res = makeNode(ResTarget);
+			res->name = NULL;
+			res->indirection = NIL;
+			res->val = (Node *)col;
+			s2->targetList = list_make1(res);
+			s2->fromClause = list_make1(rsubselect);
+			s2->unrotateInfo = $3;
+
+			RangeSubselect *n = makeNode(RangeSubselect);
+			n->lateral = false;
+			n->alias = generate_alias($3->alias, "not_rotate_as_internal_t");
+			n->subquery = (Node*)s2;
+			$$ = (Node *) n;
+		}
+	| unrotate_table unrotate_clause
+		{
+			SelectStmt *s = makeNode(SelectStmt);
+			ColumnRef *col = makeNode (ColumnRef);
+			col->fields = list_make1(makeNode(A_Star));
+			col->indnum = 0;
+
+			ResTarget *res = makeNode(ResTarget);
+			res->name = NULL;
+			res->indirection = NIL;
+			res->val = (Node *)col;
+			s->targetList = list_make1(res);
+			s->fromClause = list_make1($1);
+			s->unrotateInfo = $2;
+
+			RangeSubselect *n = makeNode(RangeSubselect);
+			n->lateral = false;
+			n->subquery = (Node*)s;
+			n->alias = generate_alias($2->alias, "not_rotate_as_internal_t");
+
+			$$ = (Node *) n;
+		}
+	| rotate_table unrotate_clause
+		{
+			SelectStmt *s = makeNode(SelectStmt);
+			ColumnRef *col = makeNode (ColumnRef);
+			col->fields = list_make1(makeNode(A_Star));
+			col->indnum = 0;
+
+			ResTarget *res = makeNode(ResTarget);
+			res->name = NULL;
+			res->indirection = NIL;
+			res->val = (Node *)col;
+			s->targetList = list_make1(res);
+			s->fromClause = list_make1($1);
+			s->unrotateInfo = $2;
+
+			RangeSubselect *n = makeNode(RangeSubselect);
+			n->lateral = false;
+			n->subquery = (Node*)s;
+			n->alias = generate_alias($2->alias, "not_rotate_as_internal_t");
+
+			$$ = (Node *) n;
+		}
+	;
 
 
 /*
@@ -25214,14 +25354,20 @@ opt_alias_clause: alias_clause		{ $$ = $1; }
 rotate_clause:
 			ROTATE '(' func_application_list rotate_for_clause rotate_in_clause ')' %prec ROTATE
 				{
-					if( u_sess->attr.attr_sql.sql_compatibility != A_FORMAT )
+					if (!DB_IS_CMPT_AD)
 						ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("rotate clause is supported only in A_FORMAT database.")));
+								errmsg("rotate clause is supported only in A or D FORMAT database.")));
 					RotateClause *n = makeNode(RotateClause);
 					n->aggregateFuncCallList = $3;
 					n->forColName = $4;
-					n->inExprList = $5;
+					base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
+					char* raw_parse_query_string = yyextra->core_yy_extra.scanbuf;
+					if (DB_IS_CMPT(D_FORMAT)) {
+						n->inExprList = TransformToConstStrNode($5, raw_parse_query_string);
+					} else {
+						n->inExprList = $5;
+					}
 					$$ = n;
 				}
 		;
@@ -25243,10 +25389,10 @@ func_application_list:
 unrotate_clause:
 			NOT ROTATE include_exclude_null_clause '(' unrotate_name_list rotate_for_clause unrotate_in_clause ')' %prec ROTATE
 				{
-					if( u_sess->attr.attr_sql.sql_compatibility != A_FORMAT )
+					if (!DB_IS_CMPT_AD)
 						ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("not rotate clause is supported only in A_FORMAT database.")));
+								errmsg("not rotate clause is supported only in A or D FORMAT database.")));
 					UnrotateClause *n = makeNode(UnrotateClause);
 					n->includeNull = $3;
 					n->colNameList = $5;
@@ -25254,7 +25400,6 @@ unrotate_clause:
 					n->inExprList = $7;
 					$$ = n;
 				}
-			| { $$ = NULL; }
 		;
 
 include_exclude_null_clause:
@@ -25955,7 +26100,13 @@ GenericType:
 				}
 		;
 
-opt_type_modifiers: '(' expr_list ')'				{ $$ = $2; }
+opt_type_modifiers: '(' expr_list ')'
+					{
+						$$ = $2;
+						if(u_sess->hook_cxt.rewriteTypmodExprHook != NULL) {
+							$$ = ((RewriteTypmodExprHookType)(u_sess->hook_cxt.rewriteTypmodExprHook))($2);
+						}
+					}
 					| /* EMPTY */					{ $$ = NIL; }
 		;
 
@@ -26255,7 +26406,7 @@ charset:
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("specifying character sets and collations is not yet supported")));
 #endif
-				if (u_sess->attr.attr_sql.sql_compatibility != B_FORMAT) {
+				if (!DB_IS_CMPT_BD) {
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("specifying character sets and collations is supported only in B-format database")));
 				}
@@ -26281,9 +26432,9 @@ convert_charset:
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("specifying character sets and collations is not yet supported")));
 #endif
-				if (u_sess->attr.attr_sql.sql_compatibility != B_FORMAT) {
+				if (!DB_IS_CMPT_BD) {
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("specifying character sets and collations is supported only in B-format database")));
+						errmsg("specifying character sets and collations is supported only in B-format or D-format database")));
 				}
 				$$ = PG_INVALID_ENCODING;
 			}
@@ -27765,6 +27916,9 @@ func_expr:	func_application within_group_clause filter_clause over_clause
 func_application:	func_name '(' func_arg_list opt_sort_clause ')'
 				{
 					FuncCall *n = makeNode(FuncCall);
+					if (DB_IS_CMPT(D_FORMAT)) {
+						Funcname_Judge($1, $3);
+					}
 					n->funcname = $1;
 					n->args = $3;
 					n->agg_order = $4;
@@ -30726,6 +30880,9 @@ reserved_keyword:
 			| WITH
 		;
 
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-rule.y"*/
+
 %%
 
 /*
@@ -32326,6 +32483,9 @@ IsValidIdent(char *input)
 bool
 IsValidIdentUsername(char *input)
 {
+	if (u_sess->hook_cxt.checkVaildUserHook != NULL) {
+		return ((checkValidUsername)(u_sess->hook_cxt.checkVaildUserHook))(input);
+	}
 	char c = input[0];
 	/*The first character id numbers or dollar*/
 	if ((c >= '0' && c <= '9') || c == '$')
@@ -32938,10 +33098,10 @@ static void checkDeleteRelationError()
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				errmsg("multi-relation delete is not yet supported.")));
 #endif
-	if (u_sess->attr.attr_sql.sql_compatibility != B_FORMAT)						
+	if (!DB_IS_CMPT_BD)						
 		ereport(errstate, 
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("multi-relation delete only support in B-format database")));
+					errmsg("multi-relation delete only support in B-format or D-format database")));
 }
 
 #ifndef MAX_SUPPORTED_FUNC_FOR_PART_EXPR
@@ -33128,6 +33288,108 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner)
 		return ident;
 	}
 }
+
+static List* TransformToConstStrNode(List *inExprList, char* raw_str)
+{
+	ListCell* cell = NULL;
+	ListCell *exprCell = NULL;
+	ResTarget *resTarget = NULL;
+	errno_t rc;
+
+	foreach (cell, inExprList)
+	{
+		RotateInCell *rotateinCell = (RotateInCell *)lfirst(cell);
+		foreach (exprCell, rotateinCell->rotateInExpr) {
+			resTarget = (ResTarget *)lfirst(exprCell);
+			if (NULL == rotateinCell->aliasname && IsA(resTarget->val, ColumnRef)) {
+				ColumnRef* column_ref = (ColumnRef*)resTarget->val;
+				if (list_length(column_ref->fields) != 1) {
+					ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("ROTATE in clause error")));
+				}
+				// column_ref info has been convert to lower case, so we need to extact the not convert lower case info in raw str
+				char * lower_column_name = strVal(linitial(column_ref->fields));
+				int len = strlen(lower_column_name);
+				pfree(lower_column_name);
+				char *raw_col_name = (char *)palloc(len + 1);
+				raw_col_name[len] = '\0';
+				errno_t rc = EOK;
+				int column_offset = 0;
+				if (raw_str[column_ref->location] == '[' || raw_str[column_ref->location] == '"') {
+					column_offset++;
+				}
+				rc = strncpy_s(raw_col_name, len + 1, raw_str + column_ref->location + column_offset, len);
+				securec_check(rc, "\0", "\0");
+				Node* const_node = makeStringConst(raw_col_name, column_ref->location);
+				resTarget->val = const_node;
+			} if (NULL == rotateinCell->aliasname && IsA(resTarget->val, A_Const)) {
+				const Value *val = &((A_Const *)resTarget->val)->val;
+				char * column_to_const_str = NULL;
+				switch (val->type) {
+					case T_Integer: {
+						char* new_col_name = (char*)palloc(NAMEDATALEN);
+						rc = memset_s(new_col_name, NAMEDATALEN, 0, NAMEDATALEN);
+						securec_check_c(rc, "\0", "\0");
+						rc = snprintf_s(new_col_name, NAMEDATALEN, NAMEDATALEN - 1, "%ld", intVal(val));
+						securec_check_ss(rc, "\0", "\0");
+						column_to_const_str = new_col_name;
+						break;
+					}
+
+					case T_Float:
+					case T_String:
+					case T_BitString:
+						column_to_const_str = strVal(val);
+						break;
+					
+					default:
+						break;
+				}
+				if (column_to_const_str != NULL) {
+					Node* const_node = makeStringConst(column_to_const_str, ((A_Const *)resTarget)->location);
+					resTarget->val = const_node;
+				}
+			}
+		}
+	}
+	return inExprList;
+}
+
+
+static Alias* generate_alias(Alias* clone_target, const char* default_alias_name)
+{
+	if (clone_target != NULL) {
+		return (Alias*)copyObject(clone_target);
+	} else {
+		Alias* result = makeNode(Alias);
+		result->aliasname = pstrdup(default_alias_name);
+		return result;
+	}
+}
+
+static void Funcname_Judge(List *names, List *args)
+{
+    if (list_length(names) > 2 || (list_length(names)== 2 && strcmp(strVal(lfirst(list_head(names))), "sys") != 0)) {
+        return;
+    }
+
+    char *funcname = strVal(lfirst(list_tail(names)));
+
+    if (strcmp(funcname, "datename") == 0 || strcmp(funcname, "datepart") == 0) {
+        Node *firstnode = (Node *)linitial(args);
+        if (IsA(firstnode, ColumnRef) && list_length(((ColumnRef *) firstnode)->fields) == 1 &&
+            IsA(linitial(((ColumnRef *) firstnode)->fields), String) && list_length(args) == 2) {
+            char *name = strVal(linitial(((ColumnRef *) firstnode)->fields));
+            linitial(args) = makeStringConst(name, -1);
+        }
+    } else if (strcmp(funcname, "dateadd") == 0) {
+        Node *firstnode = (Node *)linitial(args);
+        if (IsA(firstnode, ColumnRef) && list_length(((ColumnRef *) firstnode)->fields) == 1 &&
+            IsA(linitial(((ColumnRef *) firstnode)->fields), String) && list_length(args) == 3) {
+            char *name = strVal(linitial(((ColumnRef *) firstnode)->fields));
+            linitial(args) = makeStringConst(name, -1);
+        }
+    }
+}
 /*
  * Must undefine this stuff before including scan.c, since it has different
  * definitions for these macros.
@@ -33137,5 +33399,11 @@ static char* IdentResolveToChar(char *ident, core_yyscan_t yyscanner)
 #undef yylloc
 #undef yylex
 
-#undef yylex
+#define SCANINC
+
+/* Please note that the following line will be replaced with the contents of given file name even if with starting with a comment */
+/*$$include "gram-tsql-epilogue.y.cpp"*/
+
+#ifdef SCANINC
 #include "scan.inc"
+#endif

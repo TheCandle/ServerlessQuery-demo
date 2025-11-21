@@ -170,6 +170,8 @@
 
 static bool parse_query_dop(int* newval, void** extra, GucSource source);
 static void AssignQueryDop(int newval, void* extra);
+static void AssignAnsiNulls(bool newval, void* extra);
+static void AssignTransformNullEquals(bool newval, void* extra);
 static bool check_job_max_workers(int* newval, void** extra, GucSource source);
 static bool check_statement_max_mem(int* newval, void** extra, GucSource source);
 static bool check_statement_mem(int* newval, void** extra, GucSource source);
@@ -179,6 +181,8 @@ static bool check_inlist2joininfo(char** newval, void** extra, GucSource source)
 static void assign_inlist2joininfo(const char* newval, void* extra);
 static bool check_b_format_behavior_compat_options(char **newval, void **extra, GucSource source);
 static void assign_b_format_behavior_compat_options(const char *newval, void *extra);
+static bool check_d_format_behavior_compat_options(char **newval, void **extra, GucSource source);
+static void assign_d_format_behavior_compat_options(const char *newval, void *extra);
 static bool check_behavior_compat_options(char** newval, void** extra, GucSource source);
 static void assign_behavior_compat_options(const char* newval, void* extra);
 static bool check_plsql_compile_behavior_compat_options(char** newval, void** extra, GucSource source);
@@ -265,6 +269,7 @@ static const struct config_enum_entry adapt_database[] = {
     {g_dbCompatArray[DB_CMPT_C].name, C_FORMAT, false},
     {g_dbCompatArray[DB_CMPT_B].name, B_FORMAT, false},
     {g_dbCompatArray[DB_CMPT_PG].name, PG_FORMAT, false},
+    {g_dbCompatArray[DB_CMPT_D].name, D_FORMAT, false},
     {NULL, 0, false}
 };
 
@@ -347,12 +352,12 @@ static const struct config_enum_entry multi_stats_options[] = {
     {NULL, 0, false}
 };
 
-typedef struct b_format_behavior_compat_entry {
+typedef struct format_behavior_compat_entry {
     const char *name; /* name of behavior compat entry */
     int flag;         /* bit flag position */
-} b_format_behavior_compat_entry;
+} format_behavior_compat_entry;
  
-static const struct b_format_behavior_compat_entry b_format_behavior_compat_options[B_FORMAT_OPT_MAX] = {
+static const struct format_behavior_compat_entry b_format_behavior_compat_options[B_FORMAT_OPT_MAX] = {
     {"set_session_transaction", B_FORMAT_OPT_ENABLE_SET_SESSION_TRANSACTION},
     {"enable_set_variables", B_FORMAT_OPT_ENABLE_SET_VARIABLES},
     {"enable_modify_column", B_FORMAT_OPT_ENABLE_MODIFY_COLUMN},
@@ -362,6 +367,12 @@ static const struct b_format_behavior_compat_entry b_format_behavior_compat_opti
     {"enable_multi_charset", B_FORMAT_OPT_ENABLE_MULTI_CHARSET}
 };
 
+
+static const struct format_behavior_compat_entry d_format_behavior_compat_options[D_FORMAT_OPT_MAX] = {
+    {"enable_sbr_identifier", D_FORMAT_OPT_ENABLE_SBR_IDENTIFIER},
+    {"enable_table_hint_identifier", D_FORMAT_OPT_ENABLE_TABLE_HINT_IDENTIFIER},
+    {"enable_abs", D_FORMAT_OPT_ENABLE_ABS}
+};
 
 static const struct behavior_compat_entry behavior_compat_options[OPT_MAX] = {
     {"display_leading_zero", OPT_DISPLAY_LEADING_ZERO},
@@ -1123,19 +1134,31 @@ static void InitSqlConfigureNamesBool()
             &u_sess->attr.attr_sql.Transform_null_equals,
             false,
             NULL,
+            AssignTransformNullEquals,
+            NULL},
+        {{"ansi_nulls",
+            PGC_USERSET,
+            NODE_ALL,
+            COMPAT_OPTIONS_CLIENT,
+            gettext_noop("Contrary to the transform_null_equals parameter."),
+            gettext_noop("When turned on, The transform_null_equals will be set to off."
+                        "When turned off, The transform_null_equals will be set to on.")},
+            &u_sess->attr.attr_sql.ansi_nulls,
+            true,
+            NULL,
+            AssignAnsiNulls,
+            NULL},
+        {{"transform_to_numeric_operators",
+            PGC_USERSET,
+            NODE_SINGLENODE,
+            QUERY_TUNING_METHOD,
+            gettext_noop("When turn on, choose numeric (op) numeric for varchar (op) int."),
+            NULL},
+            &u_sess->attr.attr_sql.transform_to_numeric_operators,
+            false,
+            NULL,
             NULL,
             NULL},
-            {{"transform_to_numeric_operators",
-              PGC_USERSET,
-              NODE_SINGLENODE,
-              QUERY_TUNING_METHOD,
-              gettext_noop("When turn on, choose numeric (op) numeric for varchar (op) int."),
-              NULL},
-             &u_sess->attr.attr_sql.transform_to_numeric_operators,
-             false,
-             NULL,
-             NULL,
-             NULL},
         {{"check_function_bodies",
             PGC_USERSET,
             NODE_ALL,
@@ -3048,6 +3071,18 @@ static void InitSqlConfigureNamesString()
             check_b_format_behavior_compat_options,
             assign_b_format_behavior_compat_options,
             NULL},
+        {{"d_format_behavior_compat_options",
+            PGC_USERSET,
+            NODE_ALL,
+            COMPAT_OPTIONS,
+            gettext_noop("d format compatibility options"),
+            NULL,
+            GUC_LIST_INPUT | GUC_REPORT},
+            &u_sess->attr.attr_sql.d_format_behavior_compat_string,
+            "",
+            check_d_format_behavior_compat_options,
+            assign_d_format_behavior_compat_options,
+            NULL},
         {{"behavior_compat_options",
             PGC_USERSET,
             NODE_ALL,
@@ -3755,6 +3790,94 @@ static void assign_b_format_behavior_compat_options(const char *newval, void *ex
     list_free(elemlist);
  
     u_sess->utils_cxt.b_format_behavior_compat_flags = result;
+}
+/*
+ * check_d_format_behavior_compat_options: GUC check_hook for behavior compat options
+ */
+static bool check_d_format_behavior_compat_options(char **newval, void **extra, GucSource source)
+{
+    if (strcasecmp(*newval, "ALL") == 0) {
+        return true;
+    }
+
+    char *rawstring = NULL;
+    List *elemlist = NULL;
+    ListCell *cell = NULL;
+    int start = 0;
+ 
+    /* Need a modifiable copy of string */
+    rawstring = pstrdup(*newval);
+    /* Parse string into list of identifiers */
+    if (!SplitIdentifierString(rawstring, ',', &elemlist)) {
+        /* syntax error in list */
+        GUC_check_errdetail("invalid paramater for behavior compat information.");
+        pfree(rawstring);
+        list_free(elemlist);
+ 
+        return false;
+    }
+ 
+    foreach(cell, elemlist)
+    {
+        const char *item = (const char *)lfirst(cell);
+        bool nfound = true;
+ 
+        for (start = 0; start < D_FORMAT_OPT_MAX; start++) {
+            if (strcmp(item, d_format_behavior_compat_options[start].name) == 0) {
+                nfound = false;
+                break;
+            }
+        }
+        if (nfound) {
+            GUC_check_errdetail("invalid behavior compat option \"%s\"", item);
+            pfree(rawstring);
+            list_free(elemlist);
+            return false;
+        }
+    }
+ 
+    pfree(rawstring);
+    list_free(elemlist);
+ 
+    return true;
+}
+ 
+/*
+ * assign_d_format_behavior_compat_options: GUC assign_hook for distribute_test_param
+ */
+static void assign_d_format_behavior_compat_options(const char *newval, void *extra)
+{
+    int start = 0;
+    int result = 0;
+
+    if (strcasecmp(newval, "ALL") == 0) {
+        u_sess->utils_cxt.d_format_behavior_compat_flags = 0xFFFFFFFF;
+        return;
+    }
+
+    char *rawstring = NULL;
+    List *elemlist = NULL;
+    ListCell *cell = NULL;
+ 
+    rawstring = pstrdup(newval);
+    (void)SplitIdentifierString(rawstring, ',', &elemlist);
+ 
+    u_sess->utils_cxt.d_format_behavior_compat_flags = 0;
+    foreach(cell, elemlist)
+    {
+        for (start = 0; start < D_FORMAT_OPT_MAX; start++) {
+            const char *item = (const char *)lfirst(cell);
+ 
+            if (strcmp(item, d_format_behavior_compat_options[start].name) == 0 &&
+                !(result & d_format_behavior_compat_options[start].flag))
+                    result += d_format_behavior_compat_options[start].flag;
+        }
+    }
+ 
+    pfree(rawstring);
+    list_free(elemlist);
+ 
+    u_sess->utils_cxt.d_format_behavior_compat_flags = result;
 }
 #ifdef ENABLE_MULTIPLE_NODES
 static bool ForbidDistributeParameter(const char* elem)
@@ -4639,6 +4762,22 @@ static bool check_mmap_set(bool* newval, void** extra, GucSource source)
         return false;
     }
     return true;
+}
+/*
+ * @Description: assign new value to ansi_nulls.
+ *
+ * @param[IN] newval: new value
+ * @param[IN] extra: N/A
+ * @return: void
+ */
+static void AssignAnsiNulls(bool newval, void* extra)
+{
+    u_sess->attr.attr_sql.Transform_null_equals = !newval;
+}
+
+static void  AssignTransformNullEquals(bool newval, void* extra)
+{
+    u_sess->attr.attr_sql.ansi_nulls = !newval;
 }
 
 char* GetCompatOptions(const char* value)

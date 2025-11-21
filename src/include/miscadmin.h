@@ -41,6 +41,7 @@
 extern const uint32 UHEAP_LOCK_VERSION_NUM;
 extern const uint32 PGSTAT_LAST_SCAN_VERSION_NUM;
 extern const uint32 IDENTITY_VERSION_NUM;
+extern const uint32 SUPPORT_D_FORMAT_DATABASE;
 extern const uint32 PUBLICATION_DDL_AT_VERSION_NUM;
 extern const uint32 PIPELINED_FUNCTION_VERSION_NUM;
 extern const uint32 DISABLE_CONSTRAINT_VERSION_NUM;
@@ -185,6 +186,12 @@ extern bool contain_backend_version(uint32 version_number);
 #define B_FORMAT_OPT_ENABLE_MULTI_CHARSET 64
 #define B_FORMAT_OPT_MAX 7
 
+#define D_FORMAT_OPT_ENABLE_SBR_IDENTIFIER 1
+#define D_FORMAT_OPT_ENABLE_TABLE_HINT_IDENTIFIER 2
+#define D_FORMAT_OPT_ENABLE_ABS 4
+#define D_FORMAT_OPT_MAX 3
+
+
 #define ENABLE_SET_SESSION_TRANSACTION                                                                   \
     ((u_sess->utils_cxt.b_format_behavior_compat_flags & B_FORMAT_OPT_ENABLE_SET_SESSION_TRANSACTION) && \
      u_sess->attr.attr_sql.sql_compatibility == B_FORMAT)
@@ -202,6 +209,15 @@ extern bool contain_backend_version(uint32 version_number);
 
 #define B_DIAGNOSTICS ((u_sess->utils_cxt.b_format_behavior_compat_flags & B_FORMAT_OPT_DIAGNOSTICS) && \
         u_sess->attr.attr_sql.sql_compatibility == B_FORMAT)
+
+#define ENABLE_SBR_IDENTIFIER ((u_sess->utils_cxt.d_format_behavior_compat_flags & \
+        D_FORMAT_OPT_ENABLE_SBR_IDENTIFIER) && u_sess->attr.attr_sql.sql_compatibility == D_FORMAT)
+
+#define ENABLE_TABLE_HINT_IDENTIFIER ((u_sess->utils_cxt.d_format_behavior_compat_flags & \
+        D_FORMAT_OPT_ENABLE_TABLE_HINT_IDENTIFIER) && u_sess->attr.attr_sql.sql_compatibility == D_FORMAT)
+
+#define ENABLE_ABS ((u_sess->utils_cxt.d_format_behavior_compat_flags & \
+        D_FORMAT_OPT_ENABLE_ABS) && u_sess->attr.attr_sql.sql_compatibility == D_FORMAT)
 
 #define OPT_DISPLAY_LEADING_ZERO (1LL << 0)
 #define OPT_END_MONTH_CALCULATE  (1LL << 1)
@@ -313,6 +329,7 @@ typedef struct {
 #define DB_CMPT_B 1
 #define DB_CMPT_C 2
 #define DB_CMPT_PG 3
+#define DB_CMPT_D 4
 
 extern bool checkCompArgs(const char *cmptFmt);
 

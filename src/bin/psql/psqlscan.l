@@ -77,6 +77,7 @@ typedef enum
     IDEN_REPLACE,
     IDEN_DEFINER,
     IDEN_PROCEDURE,
+	IDEN_PROC,
     IDEN_RETURN,
     IDEN_RETURNS,
     IDEN_FUNCTION,
@@ -645,11 +646,14 @@ other			.
 					ECHO;
 					if (lex_param->begin_state == BEGIN_UNDEFINED)
 					{
+						DBFormatType dbType = GetDatabaseType();
 						/* For a transaction statement, all possible tokens after BEGIN are here */
 						if (IsTranscationTokens(yytext, "transaction") ||
+							(dbType == D_FORMAT && IsTranscationTokens(yytext, "tran")) ||
 							IsTranscationTokens(yytext, "work") ||
                             IsTranscationTokens(yytext, "isolation") ||
                             IsTranscationTokens(yytext, "read") ||
+                            IsTranscationTokens(yytext, "try") ||
                             IsTranscationTokens(yytext, "deferrable") ||
                             IsTranscationTokens(yytext, "not") ||
 							strncasecmp(yytext, ";", strlen(";")) == 0)
@@ -2251,6 +2255,8 @@ keywordRead(const char* text)
 		return IDEN_DEFINER;
 	else if (!upperstrcmp(text, "procedure"))
 		return IDEN_PROCEDURE;
+	else if (!upperstrcmp(text, "proc"))
+		return IDEN_PROC;
     else if (!upperstrcmp(text, "package"))
         return IDEN_PACKAGE;
 	else if (!upperstrcmp(text, "return"))
@@ -2326,6 +2332,7 @@ analyze_state(const char* text,PsqlScanStateData* state)
 			state->gram_state[IDEN_OR] = true;
 			state->gram_state[IDEN_DEFINER] = true;
 			state->gram_state[IDEN_PROCEDURE] = true;
+			state->gram_state[IDEN_PROC] = true;
 			state->gram_state[IDEN_FUNCTION] = true;
 			state->gram_state[IDEN_TRIGGER] = true;
 			state->gram_state[IDEN_PACKAGE] = true;
@@ -2339,6 +2346,7 @@ analyze_state(const char* text,PsqlScanStateData* state)
 		case IDEN_REPLACE:
 			state->gram_state[IDEN_DEFINER] = true;
 			state->gram_state[IDEN_PROCEDURE] = true;
+			state->gram_state[IDEN_PROC] = true;
 			state->gram_state[IDEN_FUNCTION] = true;
 			state->gram_state[IDEN_PACKAGE] = true;
 			state->gram_state[IDEN_TRIGGER] = true;
@@ -2346,6 +2354,7 @@ analyze_state(const char* text,PsqlScanStateData* state)
 			break;
 		case IDEN_DEFINER:
 			state->gram_state[IDEN_PROCEDURE] = true;
+			state->gram_state[IDEN_PROC] = true;
 			state->gram_state[IDEN_FUNCTION] = true;
 			state->gram_state[IDEN_PACKAGE] = true;
 			state->gram_state[IDEN_TRIGGER] = true;
@@ -2353,6 +2362,7 @@ analyze_state(const char* text,PsqlScanStateData* state)
 			state->count_to_read = -1;
 			break;
 		case IDEN_PROCEDURE:
+		case IDEN_PROC:
 			if (state->declare_encountered && state->begin_state == BEGIN_UNDEFINED) {
 				/*
 				 * declare_encountered is true means we have met a 'declare' already, sql may like
@@ -2361,6 +2371,7 @@ analyze_state(const char* text,PsqlScanStateData* state)
 				 */
 				state->declare_encountered = false;
 				state->gram_state[IDEN_PROCEDURE] = false;
+				state->gram_state[IDEN_PROC] = false;
 				state->gram_state[IDEN_DECLARE] = false;
 				break;
 			}
@@ -2430,6 +2441,7 @@ analyze_state(const char* text,PsqlScanStateData* state)
 			state->gram_state[IDEN_INSENSITIVE] = true;
 			state->gram_state[IDEN_NO] = true;
 			state->gram_state[IDEN_PROCEDURE] = true;
+			state->gram_state[IDEN_PROC] = true;
 			state->declare_encountered = true;
 			break;
 		case IDEN_BEGIN:

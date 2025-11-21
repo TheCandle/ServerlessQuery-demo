@@ -26,6 +26,12 @@
 #include "utils/sortsupport.h"
 #include "catalog/pg_index.h"
 
+/* Control flags for format_type_extended */
+#define FORMAT_TYPE_TYPEMOD_GIVEN	0x01	/* typemod defined by caller */
+#define FORMAT_TYPE_ALLOW_INVALID	0x02	/* allow invalid types */
+#define FORMAT_TYPE_FORCE_QUALIFY	0x04	/* force qualification of type */
+#define FORMAT_TYPE_INVALID_AS_NULL	0x08	/* NULL if undefined */
+
 /*
  *		Defined in adt/
  */
@@ -1462,6 +1468,7 @@ extern char* format_type_with_typemod(Oid type_oid, int32 typemod);
 extern Datum oidvectortypes(PG_FUNCTION_ARGS);
 extern int32 type_maximum_size(Oid type_oid, int32 typemod);
 extern char *format_type_be_qualified(Oid type_oid);
+char *format_type_extended(Oid type_oid, int32 typemod, bits16 flags);
 
 /* quote.c */
 extern Datum quote_ident(PG_FUNCTION_ARGS);

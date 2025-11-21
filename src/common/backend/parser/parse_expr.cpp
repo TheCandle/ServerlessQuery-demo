@@ -1439,6 +1439,16 @@ static bool exprIsNullConstant(Node* arg)
     return false;
 }
 
+
+
+static inline bool is_not_null_operator(const char * operator_name)
+{
+    if (operator_name == NULL) {
+        return false;
+    }
+    return strcmp(operator_name, "!=") == 0 || strcmp(operator_name, "<>") == 0;
+}
+
 static Node* transformAExprOp(ParseState* pstate, A_Expr* a)
 {
     Node* lexpr = a->lexpr;
@@ -1458,6 +1468,16 @@ static Node* transformAExprOp(ParseState* pstate, A_Expr* a)
         NullTest* n = makeNode(NullTest);
 
         n->nulltesttype = IS_NULL;
+
+        n->arg = exprIsNullConstant(lexpr) ? (Expr *)rexpr : (Expr *)lexpr;
+
+        result = transformExprRecurse(pstate, (Node*)n);
+    } else if (DB_IS_CMPT(D_FORMAT) && u_sess->attr.attr_sql.Transform_null_equals && list_length(a->name) == 1 &&
+        is_not_null_operator(strVal(linitial(a->name))) && (exprIsNullConstant(lexpr) || exprIsNullConstant(rexpr)) &&
+        (!IsA(lexpr, CaseTestExpr) && !IsA(rexpr, CaseTestExpr))) {
+        NullTest* n = makeNode(NullTest);
+
+        n->nulltesttype = IS_NOT_NULL;
 
         n->arg = exprIsNullConstant(lexpr) ? (Expr *)rexpr : (Expr *)lexpr;
 
@@ -3110,7 +3130,7 @@ static Node* transformCharsetClause(ParseState* pstate, CharsetClause* c)
     Node *result = NULL;
     Const *con = NULL;
 
-    Assert(DB_IS_CMPT(B_FORMAT));
+    Assert(DB_IS_CMPT_BD);
     result = transformExprRecurse(pstate, c->arg);
     Assert(IsA(result, Const));
     con = (Const*)result;
@@ -3158,7 +3178,7 @@ static Node* transformCollateClause(ParseState* pstate, CollateClause* c)
     * separately, so we'll let it go here.
     */
     if (!type_is_collatable(argtype) && argtype != UNKNOWNOID &&
-        !(DB_IS_CMPT(B_FORMAT) &&
+        !(DB_IS_CMPT_BD &&
             (IsBinaryType(argtype) ||
                 (IsA(newc->arg, Const) && (argtype == BITOID || argtype == VARBITOID))))) {
         ereport(ERROR,
@@ -3168,7 +3188,7 @@ static Node* transformCollateClause(ParseState* pstate, CollateClause* c)
     }
     newc->collOid = LookupCollation(pstate, c->collname, c->location);
     newc->location = c->location;
-    if (!DB_IS_CMPT(B_FORMAT)) {
+    if (!DB_IS_CMPT_BD) {
         return (Node*)newc;
     }
 

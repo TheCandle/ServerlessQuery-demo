@@ -343,6 +343,7 @@ const char* sync_guc_variable_namelist[] = {"work_mem",
     "standard_conforming_strings",
     "synchronize_seqscans",
     "transform_null_equals",
+    "ansi_nulls",
     "exit_on_error",
 #ifdef ENABLE_MULTIPLE_NODES
     "gtm_backup_barrier",
@@ -9161,7 +9162,10 @@ void ExecSetVariableStmt(VariableSetStmt* stmt, ParamListInfo paramInfo)
                 strcasecmp(stmt->name, "last_insert_id") == 0) {
                 ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                         errmsg("identity and last_insert_id is not supported for setting")));
-            } 
+            }
+            if (strcasecmp(stmt->name, "_d_virtual_value") == 0 && DB_IS_CMPT(D_FORMAT)) {
+                break;
+            }
             (void)set_config_option(stmt->name,
                 ExtractSetVariableArgs(stmt),
                 ((superuser() || (isOperatoradmin(GetUserId()) && u_sess->attr.attr_security.operation_mode)) ?

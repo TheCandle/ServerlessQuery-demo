@@ -561,6 +561,7 @@ typedef struct knl_u_utils_context {
     int GUCNestLevel; /* 1 when in main transaction */
 
     unsigned int b_format_behavior_compat_flags;
+    unsigned int d_format_behavior_compat_flags;
     int64 behavior_compat_flags;
     unsigned int plsql_compile_behavior_compat_flags;
 
@@ -2972,6 +2973,14 @@ typedef struct knl_u_hook_context {
     void *modifyTypeForPartitionKeyHook;
     void *deparseCollectedCommandHook;
     void *enableProcedureExecutementHook;
+    void *plsqlCompileHook;
+    void *checkVaildUserHook;
+    void *fetchStatusHook;
+    void *rowcountHook;
+    void *checkIsMssqlHexHook;
+    void *rewriteTypmodExprHook;
+    void *invokeNextvalHook;
+    void *getVarbinaryOidHook;
 } knl_u_hook_context;
 
 typedef struct knl_u_libsw_context {

@@ -179,6 +179,12 @@ typedef struct RelationMetaData {
 #define COMPRESSION_SNAPPY "snappy"
 #define COMPRESSION_LZ4 "lz4"
 
+#define DATA_COMPRESSION_D_INDEX_NONE "none"
+#define DATA_COMPRESSION_D_INDEX_ROW "row"
+#define DATA_COMPRESSION_D_INDEX_PAGE "page"
+#define DATA_COMPRESSION_D_INDEX_COLUMNSTORE "columnstore"
+#define DATA_COMPRESSION_D_INDEX_COLUMNSTROE_ARCHIVE "columnstore_archive"
+
 /*
  * values for different table access method types.
  */
