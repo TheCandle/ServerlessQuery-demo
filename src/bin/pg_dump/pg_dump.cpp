@@ -21252,6 +21252,9 @@ static void dumpAttrDef(Archive* fout, AttrDefInfo* adinfo)
 
 static void setTableInfoAttNumAndNames(Archive* fout, TableInfo* tblInfo)
 {
+    if(tblInfo == NULL) {
+        return;
+    }
     if (0 != tblInfo->numatts && NULL != tblInfo->attnames)
         return;
     if (fout->remoteVersion < 90200) {
@@ -21632,7 +21635,7 @@ static void dumpConstraint(Archive* fout, ConstraintInfo* coninfo)
         return;
 
     tbinfo = coninfo->contable;
-    if (tbinfo == NULL) {
+    if (tbinfo == NULL && coninfo->condomain == NULL) {
        return;
     }
     setTableInfoAttNumAndNames(fout, tbinfo);
@@ -21642,7 +21645,7 @@ static void dumpConstraint(Archive* fout, ConstraintInfo* coninfo)
 
     isBcompatibility = findDBCompatibility(fout, PQdb(GetConnection(fout)));
 
-    if (coninfo->contype == 'p' || coninfo->contype == 'u' || coninfo->contype == 'x') {
+    if ((coninfo->contype == 'p' || coninfo->contype == 'u' || coninfo->contype == 'x') && (tbinfo != NULL)) {
         if (coninfo->separate) {
             /* Index-related constraint */
             IndxInfo* indxinfo = NULL;
@@ -21722,7 +21725,7 @@ static void dumpConstraint(Archive* fout, ConstraintInfo* coninfo)
                 NULL,
                 NULL);
         }
-    } else if (coninfo->contype == 'f') {
+    } else if (coninfo->contype == 'f' && (tbinfo != NULL)) {
         /*
          * XXX Potentially wrap in a 'SET CONSTRAINTS OFF' block so that the
          * current table data is not processed
