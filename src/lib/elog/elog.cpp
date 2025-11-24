@@ -79,6 +79,7 @@ typedef struct ToolLogInfo {
 
 #define LOG_MAX_COUNT    50
 #define GS_LOCKFILE_SIZE 1024
+#define COMMAND_ATTEMPT_COUNT 5
 #define curLogFileMark "-current.log"
 #define LOG_DIR_FMT "%s/bin/%s"
 // optimize,to suppose pirnt to file and screen
@@ -532,9 +533,15 @@ void init_log(char* prefix_name)
     if (true == is_redirect) {
         int file_count = 0;
         FILE *fd = NULL;
-        if (gs_srvtool_lock(prefix_name, log_dir, &fd) == -1) {
-            printf(_("another %s command is running, init_log failed!\n"), prefix_name);
-            exit(1);
+        int attempt_count = 0;
+        while (gs_srvtool_lock(prefix_name, log_dir, &fd) == -1) {
+            attempt_count++;
+            if (attempt_count <= COMMAND_ATTEMPT_COUNT) {
+                sleep(1);
+            } else {
+                printf(_("another %s command is running, init_log failed!\n"), prefix_name);
+                exit(1);
+            }
         }
 
         redirect_output(prefix_name, log_dir, &file_count);
