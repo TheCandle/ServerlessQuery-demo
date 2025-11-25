@@ -1112,7 +1112,7 @@ static ExecNodes* pgxc_FQS_get_relation_nodes(RangeTblEntry* rte, Index varno, Q
         foreach (cell, distributeCol) {
             foreach (lc, query->targetList) {
                 tle = (TargetEntry*)lfirst(lc);
-                if (tle->resjunk)
+                if (tle == NULL || tle->resjunk)
                     continue;
                 if (strcmp(tle->resname, strVal(lfirst(cell))) == 0) {
                     tle = (TargetEntry*)eval_const_expressions(NULL, (Node*)tle);

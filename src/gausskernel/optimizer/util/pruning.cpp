@@ -1506,11 +1506,10 @@ static PruningResult* recordBoundaryFromOpExpr(const OpExpr* expr, PruningContex
     Param* paramArg = NULL;
     OpExpr* exprPart = NULL;
 
-    if (context != NULL) {
-        AssertEreport(PointerIsValid(context->relation), MOD_OPT, "Unexpected NULL pointer for context->relation.");
-        AssertEreport(PointerIsValid(GetPartitionMap(context)), MOD_OPT, 
-                      "Unexpected NULL pointer for context->relation->partMap.");
-    }
+    AssertEreport(PointerIsValid(context), MOD_OPT, "Unexpected NULL pointer for context.");
+    AssertEreport(PointerIsValid(context->relation), MOD_OPT, "Unexpected NULL pointer for context->relation.");
+    AssertEreport(PointerIsValid(GetPartitionMap(context)), MOD_OPT,
+                  "Unexpected NULL pointer for context->relation->partMap.");
 
     result = makeNode(PruningResult);
 

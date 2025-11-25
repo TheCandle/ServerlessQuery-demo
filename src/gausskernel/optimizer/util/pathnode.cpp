@@ -760,8 +760,8 @@ void set_cheapest(RelOptInfo* parent_rel, PlannerInfo* root)
                 num_datanodes,
                 num_datanodes);
             /* only keep the path with same hint value */
-            if (tmp_path->total_cost < cheapest_total_path->total_cost + redistribute_cost &&
-                tmp_path->hint_value == cheapest_total_path->hint_value)
+            if (cheapest_total_path != NULL && tmp_path->total_cost < cheapest_total_path->total_cost
+                + redistribute_cost && tmp_path->hint_value == cheapest_total_path->hint_value)
                 cheapest_total_path_list = lappend(cheapest_total_path_list, tmp_path);
             if (list_length(cheapest_total_path_list) == MAX_PATH_NUM)
                 break;
@@ -1622,6 +1622,10 @@ void add_path(PlannerInfo* root, RelOptInfo* parent_rel, Path* new_path)
      */
     CHECK_FOR_INTERRUPTS();
 
+    if (new_path == NULL) {
+        return;
+    }
+
     if (!AddPathPreCheck(new_path)) {
         return;
     }
@@ -1666,6 +1670,7 @@ void add_path(PlannerInfo* root, RelOptInfo* parent_rel, Path* new_path)
     p1_prev = NULL;
     for (p1 = list_head(parent_rel->pathlist); p1 != NULL; p1 = p1_next) {
         Path* old_path = (Path*)lfirst(p1);
+        Assert(old_path != NULL);
         bool remove_old = false; /* unless new proves superior */
         bool eq_diskey = true;
         PathCostComparison costcmp = COSTS_DIFFERENT;

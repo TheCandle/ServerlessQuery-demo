@@ -1096,6 +1096,7 @@ void GlobalPlanCache::CleanUpByTime()
             foreach(l, gpckey_list) {
                 bool found = false;
                 GPCKey  *key = (GPCKey *)lfirst(l);
+                Assert (key != NULL);
                 GPCEntry *entry = NULL;
                 entry = (GPCEntry *)hash_search(m_array[bucket_id].hash_tbl, (void *)key, HASH_FIND, &found);
                 if (entry) {

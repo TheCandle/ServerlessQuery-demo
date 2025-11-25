@@ -149,6 +149,7 @@ static void SendFunctionResult(Datum retval, bool isnull, Oid rettype, int16 for
 
             getTypeOutputInfo(rettype, &typoutput, &typisvarlena);
             outputstr = OidOutputFunctionCall(typoutput, retval);
+            AssertEreport(outputstr != NULL, MOD_EXECUTOR, "outputstr is NULL");
             pq_sendcountedtext(&buf, outputstr, strlen(outputstr), false);
             pfree_ext(outputstr);
         } else if (format == 1) {
@@ -158,6 +159,7 @@ static void SendFunctionResult(Datum retval, bool isnull, Oid rettype, int16 for
 
             getTypeBinaryOutputInfo(rettype, &typsend, &typisvarlena);
             outputbytes = OidSendFunctionCall(typsend, retval);
+            AssertEreport(outputbytes != NULL, MOD_EXECUTOR, "outputbytes is NULL");
             pq_sendint32(&buf, VARSIZE(outputbytes) - VARHDRSZ);
             pq_sendbytes(&buf, VARDATA(outputbytes), VARSIZE(outputbytes) - VARHDRSZ);
             pfree_ext(outputbytes);

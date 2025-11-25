@@ -447,6 +447,7 @@ static void flagInhAttrs(TableInfo* ptblinfo, int inumTables)
                 attrDef->adtable = tbinfo;
                 attrDef->adnum = j + 1;
                 attrDef->adef_expr = gs_strdup("NULL");
+                attrDef->adupd_expr = gs_strdup("");
 
                 /* Will column be dumped explicitly? */
                 if (shouldPrintColumn(tbinfo, j)) {
