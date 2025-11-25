@@ -100,6 +100,7 @@ option(HAVE_POSIX_SIGNALS "enable posix signals, this set to default" ON)
 option(HAVE_GCC_INT_ATOMICS "enable gcc buildin atomics operations, this set to default" ON)
 option(FLEXIBLE_ARRAY_MEMBER "pq_ce need" ON)
 option(ENABLE_OPENEULER_MAJOR "support openEuler 22.03 LTS, this set to default" OFF)
+option(ENABLE_BLCKSZ_4K "support set block size 4096, this set to default" OFF)
 
 # we will differ compile flags and definitions by different vars
 set(DB_COMMON_DEFINE "")
