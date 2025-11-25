@@ -618,8 +618,10 @@ KmUnStr hwc_kms_dk_create(HwcKmsMgr *kms, const char *keypath, KmUnStr *cipher)
         km_err_msg(kms->err, "failed to decode hex data key plain and cipher in http response body of '%s'.", kms->url);
     }
 
-    cipher->val = _cipher.val;
-    cipher->len = _cipher.len;
+    if (_cipher.val != NULL && _cipher.len != NULL) {
+        cipher->val = _cipher.val;
+        cipher->len = _cipher.len;
+    }
 
     return plain;
 }

@@ -688,6 +688,7 @@ bool CacheLoader::fill_cached_columns(PGconn *conn)
     int atttypid_num = data_fetcher.get_column_index("atttypid");
     int change_epoch_num = data_fetcher.get_column_index("change_epoch");
     m_columns_list.clear();
+    bool success = true;
     while (data_fetcher.next()) {
         update_last_change_epoch(data_fetcher[change_epoch_num]);
         Oid my_oid = (Oid)atoll(data_fetcher[my_oid_num]);
@@ -704,8 +705,12 @@ bool CacheLoader::fill_cached_columns(PGconn *conn)
             table_name, column_name, column_position, data_type_oid, data_type_mod);
         if (cached_column == NULL) {
             fprintf(stderr, "failed to new CachedColumn object\n");
-            return false;
+            success = false;
+            break;
         }
+
+        std::unique_ptr<CachedColumn> column_guard(cached_column);
+
         cached_column->init();
         cached_column->set_data_type(atoi(data_fetcher[atttypid_num]));
         m_schemas_list.add(data_fetcher[table_schema_num]);
@@ -713,18 +718,22 @@ bool CacheLoader::fill_cached_columns(PGconn *conn)
         Oid column_setting_oid = data_fetcher[column_setting_oid_num] ? atoll(data_fetcher[column_setting_oid_num]) : 0;
 
         const CachedColumnSetting *cached_column_setting = m_column_settings_list.get_by_oid(column_setting_oid);
-        if (cached_column_setting) {
-            cached_column->add_executor(cached_column_setting->get_executor());
-        } else {
+        if (!cached_column_setting) {
             fprintf(stderr, "failed to retrieve column encryption key executor: %d\n", (int)column_setting_oid);
             continue;
         }
+        cached_column->add_executor(cached_column_setting->get_executor());
 
+        column_guard.release();
         /*  add to maps */
         m_columns_list.add(cached_column);
     }
+    
+    if (!success) {
+        m_columns_list.clear();
+    }
 
-    return true;
+    return success;
 }
 
 const bool CacheLoader::fill_cached_types(PGconn *conn)

@@ -93,6 +93,10 @@ ColumnEncryptionAlgorithm get_algo_combination(AlgoType algo)
 CmkemErrCode encrypt_with_symm_algo(AlgoType algo, CmkemUStr *plain, CmkemUStr *key, CmkemUStr **cipher)
 {
     int cipher_len = 0;
+    if (key == NULL) {
+        cmkem_errmsg("invalid NULL parameter passed to encrypt_with_symm_algo");
+        return CMKEM_NULL_PTR_ERR;
+    }
     AeadAesHamcEncKey derived_key = AeadAesHamcEncKey(key->ustr_val, get_key_len_by_algo(algo));
 
     *cipher = malloc_cmkem_ustr(get_cipher_text_size(plain->ustr_len));
@@ -120,7 +124,10 @@ CmkemErrCode encrypt_with_symm_algo(AlgoType algo, CmkemUStr *plain, CmkemUStr *
 CmkemErrCode decrypt_with_symm_algo(AlgoType algo, CmkemUStr *cipher, CmkemUStr *key, CmkemUStr **plain)
 {
     int plain_len = 0;
-
+    if (key == NULL) {
+        cmkem_errmsg("invalid NULL parameter passed to encrypt_with_symm_algo");
+        return CMKEM_NULL_PTR_ERR;
+    }
     AeadAesHamcEncKey derived_key = AeadAesHamcEncKey(key->ustr_val, get_key_len_by_algo(algo));
 
     *plain = malloc_cmkem_ustr(cipher->ustr_len); /* the plain cmkem_list_len must be less than cipher cmkem_list_len */
