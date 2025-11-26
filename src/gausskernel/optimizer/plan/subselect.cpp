@@ -6679,7 +6679,11 @@ void pull_up_sort_limit_clause(Query* query, Query* subquery, bool set_refs)
             continue;
         }
         tle = get_tle_by_resno(query->targetList, tle_in->resno);
- 
+        if (unlikely(tle == nullptr)) {
+            ereport(ERROR, (errmsg("attribute number %d not found in view targetlist", tle_in->resno)));
+            return; /* suppresses static check warnings */
+        }
+
         tle->ressortgroupref = tle_in->ressortgroupref;
         sortreflist = lappend(sortreflist, tle_in);
     }
