@@ -2302,6 +2302,12 @@ static Node* trans_lateral_vars_mutator(Node *node, trans_lateral_vars_t *latera
         {
             Index varattno = var->varattno;
             TargetEntry *tle = get_tle_by_resno(target_list, varattno);
+            if (!tle) {
+                ereport(ERROR,
+                    (errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
+                        errmsg("bogus varattno for lateral var: %d", var->varattno)));
+                return nullptr; /* suppresses static check warnings */
+            }
 
             return (Node *)copyObject(tle->expr);
         }
