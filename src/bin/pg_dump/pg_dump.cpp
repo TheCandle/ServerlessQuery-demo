@@ -9448,7 +9448,8 @@ EventInfo* getEvents(Archive *fout, int *numEvents)
             query,
             "SELECT pg_job.oid,  job_id, log_user, job_name, pg_job.nspname, pg_namespace.oid, dbname, start_date, "
             "end_date, %s, enable "
-            "FROM pg_job LEFT join pg_namespace on pg_namespace.nspname = pg_job.nspname where dbname=\'%s\'",
+            "FROM pg_catalog.pg_job "
+            "LEFT join pg_namespace on pg_namespace.nspname = pg_job.nspname where dbname=\'%s\'",
             intervalStr, database_name);
 
         res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -9488,25 +9489,27 @@ EventInfo* getEvents(Archive *fout, int *numEvents)
             Oid ev_oid = atooid(PQgetvalue(res, i, i_jobid));
             PQExpBuffer attquery = createPQExpBuffer();
             appendPQExpBuffer(attquery, "SELECT "
-            "* "
-            "FROM gs_job_attribute where job_name='%s'", evinfo[i].evname);
+            "attribute_name, attribute_value, pg_catalog.quote_literal(attribute_value) as liter "
+            "FROM pg_catalog.gs_job_attribute where job_name='%s'", evinfo[i].evname);
             attres = ExecuteSqlQuery(fout, attquery->data, PGRES_TUPLES_OK);
             attntups = PQntuples(attres);
             int i_attributename;
             int i_attributevalue;
+            int i_quote_literal;
             for (j = 0; j < attntups; j++) {
                 i_attributename = PQfnumber(attres, "attribute_name");
                 i_attributevalue = PQfnumber(attres, "attribute_value");
+                i_quote_literal = PQfnumber(attres, "liter");
                 if (strcmp(PQgetvalue(attres, j, i_attributename), "auto_drop") == 0) {
                     evinfo[i].autodrop = (PQgetvalue(attres, j, i_attributevalue)[0] == 't');
                 } else if (strcmp(PQgetvalue(attres, j, i_attributename), "comments") == 0) {
-                    evinfo[i].comment = gs_strdup(PQgetvalue(attres, j, i_attributevalue));
+                    evinfo[i].comment = gs_strdup(PQgetvalue(attres, j, i_quote_literal));
                 }
             }
             PQExpBuffer procquery = createPQExpBuffer();
             appendPQExpBuffer(procquery, "SELECT "
             "what "
-            "FROM pg_job_proc where job_id=%u", ev_oid);
+            "FROM pg_catalog.pg_job_proc where job_id=%u", ev_oid);
             procres = ExecuteSqlQuery(fout, procquery->data, PGRES_TUPLES_OK);
             i_evbody = PQfnumber(procres, "what");
             evinfo[i].evbody = gs_strdup(PQgetvalue(procres, 0, i_evbody));
@@ -9826,6 +9829,7 @@ void getTableAttrs(Archive* fout, TableInfo* tblinfo, int numTables)
 
     int i_column_name = 0;
     int i_column_key_name = 0;
+    int i_column_key_namespace = 0;
     int i_encryption_type = 0;
     int i_client_encryption_original_type = 0;
 
@@ -9907,9 +9911,11 @@ void getTableAttrs(Archive* fout, TableInfo* tblinfo, int numTables)
             
             appendPQExpBuffer(ce_sql,
                 "SELECT b.column_name, a.column_key_name, b.encryption_type, "
-                "pg_catalog.format_type(c.atttypmod, b.data_type_original_mod) AS client_encryption_original_type from "
-                "gs_encrypted_columns b inner join pg_attribute c on b.column_name = c.attname and "
-                "c.attrelid = b.rel_id and b.rel_id = '%u' inner join gs_column_keys a on a.oid = b.column_key_id",
+                "pg_catalog.format_type(c.atttypmod, b.data_type_original_mod) AS client_encryption_original_type, "
+                "n.nspname AS column_key_namespace "
+                "FROM gs_encrypted_columns b inner join pg_attribute c on b.column_name = c.attname and "
+                "c.attrelid = b.rel_id and b.rel_id = '%u' inner join gs_column_keys a on a.oid = b.column_key_id "
+                "INNER JOIN pg_namespace n ON a.key_namespace = n.oid",
                 tbinfo->dobj.catId.oid);
         } else if (fout->remoteVersion >= 90100) {
             /*
@@ -10036,6 +10042,7 @@ void getTableAttrs(Archive* fout, TableInfo* tblinfo, int numTables)
 
         i_column_name =  PQfnumber(ce_res, "column_name");
         i_column_key_name =  PQfnumber(ce_res, "column_key_name");
+        i_column_key_namespace =  PQfnumber(ce_res, "column_key_namespace");
         i_encryption_type = PQfnumber(ce_res, "encryption_type");
         i_client_encryption_original_type = PQfnumber(ce_res, "client_encryption_original_type");
 
@@ -10044,6 +10051,7 @@ void getTableAttrs(Archive* fout, TableInfo* tblinfo, int numTables)
         tbinfo->atttypnames = (char**)pg_malloc(ntups * sizeof(char*));
 
         tbinfo->column_key_names = (char**)pg_malloc(ntups * sizeof(char*));
+        tbinfo->column_key_namespaces = (char**)pg_malloc(ntups * sizeof(char*));
         tbinfo->encryption_type = (int*)pg_malloc(ntups * sizeof(int));
 
         tbinfo->typid = (int*)pg_malloc(ntups * sizeof(int));
@@ -10071,11 +10079,13 @@ void getTableAttrs(Archive* fout, TableInfo* tblinfo, int numTables)
             tbinfo->attnames[j] = gs_strdup(PQgetvalue(res, j, i_attname));
             tbinfo->atttypnames[j] = gs_strdup(PQgetvalue(res, j, i_atttypname));
             tbinfo->column_key_names[j]  = NULL;
+            tbinfo->column_key_namespaces[j] = NULL;
             tbinfo->encryption_type[j] = 0;
             for (int k = 0; k < ce_ntups; k++) {
                 char *temp_column_name = PQgetvalue(ce_res, k, i_column_name);
                 if (temp_column_name != NULL && strcmp(temp_column_name, tbinfo->attnames[j]) == 0) {
                     tbinfo->column_key_names[j] = gs_strdup(PQgetvalue(ce_res, k, i_column_key_name));
+                    tbinfo->column_key_namespaces[j] = gs_strdup(PQgetvalue(ce_res, k, i_column_key_namespace));
                     tbinfo->encryption_type[j] = atoi(PQgetvalue(ce_res, k, i_encryption_type));
                     if (tbinfo->atttypnames[j] != NULL) {
                         free(tbinfo->atttypnames[j]);
@@ -20155,7 +20165,9 @@ static void dumpTableSchema(Archive* fout, TableInfo* tbinfo)
                  * Default value --- suppress if to be printed separately.
                  */
                 bool has_default = (tbinfo->attrdefs[j] != NULL && !tbinfo->attrdefs[j]->separate);
-                bool has_encrypted_column = (tbinfo->column_key_names[j] != NULL && tbinfo->encryption_type[j] != 0);
+                bool has_encrypted_column = (tbinfo->column_key_names[j] != NULL &&
+                    tbinfo->column_key_namespaces[j] != NULL &&
+                    tbinfo->encryption_type[j] != 0);
                 /*
                  * Not Null constraint --- suppress if inherited, except in
                  * binary-upgrade case where that won't work.
@@ -20199,8 +20211,10 @@ static void dumpTableSchema(Archive* fout, TableInfo* tbinfo)
                     appendPQExpBuffer(q, "%s", tbinfo->atttypnames[j]);
                     if (has_encrypted_column) {
                         char *encryption_type = NULL;
-                        appendPQExpBuffer(q, " encrypted with (column_encryption_key = %s, ",
-                            tbinfo->column_key_names[j]);
+                        appendPQExpBuffer(q, " encrypted with (column_encryption_key = %s.",
+                                fmtId(tbinfo->column_key_namespaces[j]));
+                        appendPQExpBuffer(q, "%s, ",
+                                fmtId(tbinfo->column_key_names[j]));
                         if (tbinfo->encryption_type[j] == 2) {
                             encryption_type = "DETERMINISTIC";
                         } else if (tbinfo->encryption_type[j] == 1) {
@@ -20703,6 +20717,7 @@ static void dumpTableSchema(Archive* fout, TableInfo* tbinfo)
                     bool has_default = (tbinfo->attrdefs[j] != NULL && !tbinfo->attrdefs[j]->separate);
                     bool has_notnull = (tbinfo->notnull[j] && (!tbinfo->inhNotNull[j] || binary_upgrade));
                     bool has_encrypted_column = (tbinfo->column_key_names[j] != NULL && 
+                        tbinfo->column_key_namespaces[j] != NULL &&
                         tbinfo->encryption_type[j] != 0);
                     bool has_nextval = false;
 
@@ -20739,8 +20754,10 @@ static void dumpTableSchema(Archive* fout, TableInfo* tbinfo)
                         appendPQExpBuffer(q, "%s", tbinfo->atttypnames[j]);
                         if (has_encrypted_column) {
                             char *encryption_type = NULL;
-                            appendPQExpBuffer(q, " encrypted with (column_encryption_key = %s, ", 
-                                tbinfo->column_key_names[j]);
+                            appendPQExpBuffer(q, " encrypted with (column_encryption_key = %s.", 
+                                fmtId(tbinfo->column_key_namespaces[j]));
+                            appendPQExpBuffer(q, "%s, ", 
+                                fmtId(tbinfo->column_key_names[j]));
                             if (tbinfo->encryption_type[j] == 2) {
                                 encryption_type = "DETERMINISTIC";
                             } else if (tbinfo->encryption_type[j] == 1) {
@@ -22742,10 +22759,10 @@ static void dumpEvent(Archive *fout, EventInfo *einfo)
     } else {
         appendPQExpBuffer(query, "DISABLE ");
     }
-    if (einfo->comment) {
-        appendPQExpBuffer(query, "COMMENT \'%s\' ", einfo->comment);
+    if (strlen(einfo->comment)) {
+        appendPQExpBuffer(query, "COMMENT %s ", einfo->comment);
     }
-    appendPQExpBuffer(query, "DO %s;", einfo->evbody);
+    appendPQExpBuffer(query, "DO %s", einfo->evbody);
 
     ArchiveEntry(fout,
         einfo->dobj.catId,

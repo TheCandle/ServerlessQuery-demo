@@ -2959,6 +2959,7 @@ typedef struct knl_u_hook_context {
     void *pluginSpiReciverParamHook;
     void *pluginSpiExecuteMultiResHook;
     void *pluginMultiResExceptionHook;
+    void *pluginCheckSelectProcHook;
     void *getTypeZeroValueHook;
     void *deparseQueryHook;
     void *checkSqlFnRetvalHook;

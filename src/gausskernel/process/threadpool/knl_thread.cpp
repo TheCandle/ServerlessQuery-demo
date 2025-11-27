@@ -858,7 +858,6 @@ static void knl_t_postgres_init(knl_t_postgres_context* postgres_cxt)
     postgres_cxt->isInResetUserName = false;
     postgres_cxt->whereToSendOutput = DestDebug;
     postgres_cxt->local_foreign_respool = NULL;
-    postgres_cxt->max_stack_depth_bytes = 100 * 1024L;
     postgres_cxt->password_changed = false;
     postgres_cxt->stack_base_ptr = NULL;
     postgres_cxt->xact_started = false;

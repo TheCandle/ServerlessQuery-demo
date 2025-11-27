@@ -116,6 +116,7 @@ static void knl_u_attr_init(knl_session_attr* attr)
     attr->attr_sql.enable_upsert_to_merge = false;
     attr->attr_common.extension_session_vars_array_size = 0;
     attr->attr_common.extension_session_vars_array = NULL;
+    attr->attr_common.max_stack_depth_bytes = 100 * 1024L;
 }
 
 void knl_u_executor_init(knl_u_executor_context* exec_cxt)

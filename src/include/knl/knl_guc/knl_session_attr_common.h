@@ -80,6 +80,8 @@ typedef struct knl_session_attr_common {
     int bbox_dump_count;
     int session_sequence_cache;
     int max_stack_depth;
+    /* max_stack_depth converted to bytes for speed of checking */
+    long max_stack_depth_bytes;
     int max_query_retry_times;
     int StatementTimeout;
     int SessionTimeout;

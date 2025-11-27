@@ -1737,9 +1737,6 @@ typedef struct knl_t_postgres_context {
     int whereToSendOutput;  // enum CommandDest
     struct ResourcePool* local_foreign_respool;
 
-    /* max_stack_depth converted to bytes for speed of checking */
-    long max_stack_depth_bytes;
-
     /* mark if the initial password has been changed or not */
     bool password_changed;
 
