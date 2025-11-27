@@ -97,7 +97,7 @@
 ./share/postgresql/extension/dolphin--4.1--4.2.sql
 ./share/postgresql/extension/dolphin--4.2--4.1.sql
 ./share/postgresql/extension/dolphin--4.2--4.3.sql
-./share/postgresql/extension/dolphin--4.1--4.2.sql
+./share/postgresql/extension/dolphin--4.3--4.2.sql
 ./share/postgresql/extension/dolphin--4.3--5.0.sql
 ./share/postgresql/extension/dolphin--5.0--4.3.sql
 ./share/postgresql/extension/openGauss_expr_dolphin.ir
