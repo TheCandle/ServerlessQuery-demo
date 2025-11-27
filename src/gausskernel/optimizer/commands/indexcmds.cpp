@@ -782,10 +782,10 @@ ObjectAddress DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, 
         concurrent = false;
     }
 
-    if (concurrent && strcmp(stmt->accessMethod, "bm25") == 0) {
-        ereport(ERROR,
-            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                errmsg("concurrent index creation is not supporteded for bm25")));
+    if (concurrent && (strcmp(stmt->accessMethod, "bm25") == 0 || strcmp(stmt->accessMethod, "hnsw") == 0 ||
+                       strcmp(stmt->accessMethod, "ivfflat") == 0)) {
+        ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        errmsg("concurrent index creation is not supported for %s", stmt->accessMethod)));
     }
 
     /* Don't suppport gin/gist index on global temporary table */
@@ -811,7 +811,9 @@ ObjectAddress DefineIndex(Oid relationId, IndexStmt* stmt, Oid indexRelationId, 
      */
     lockmode = concurrent ? ShareUpdateExclusiveLock : ShareLock;
     rel = heap_open(relationId, lockmode);
-    if (RelationIsPartitioned(rel) && strcmp(stmt->accessMethod, "bm25") == 0) {
+    if (RelationIsPartitioned(rel) && (strcmp(stmt->accessMethod, "bm25") == 0 ||
+                                       strcmp(stmt->accessMethod, "hnsw") == 0 ||
+                                       strcmp(stmt->accessMethod, "ivfflat") == 0)) {
         elog(ERROR, "%s index is not supported for partition table.", (stmt->accessMethod));
     }
 
@@ -3727,12 +3729,14 @@ static bool checkIndexForReindexConcurrently(Relation indexRelation, bool reinde
         return false;
     }
 
-    if (strcmp(indexRelation->rd_am->amname.data, "bm25") == 0) {
-        ereport(errorType, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                errmsg("cannot reindex concurrently bm25 index \" %s.%s\"%s",
-                get_namespace_name(get_rel_namespace(indexRelation->rd_id)),
-                get_rel_name(indexRelation->rd_id),
-                reindexIndex ? "" : ", skipping")));
+    if (strcmp(indexRelation->rd_am->amname.data, "bm25") == 0 ||
+        strcmp(indexRelation->rd_am->amname.data, "hnsw") == 0 ||
+        strcmp(indexRelation->rd_am->amname.data, "ivfflat") == 0) {
+        ereport(errorType,
+                (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                 errmsg("cannot reindex concurrently %s index \" %s.%s\"%s", indexRelation->rd_am->amname.data,
+                        get_namespace_name(get_rel_namespace(indexRelation->rd_id)), get_rel_name(indexRelation->rd_id),
+                        reindexIndex ? "" : ", skipping")));
         return false;
     }
 
