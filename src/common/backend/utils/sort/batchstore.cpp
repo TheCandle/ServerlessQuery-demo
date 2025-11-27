@@ -508,6 +508,12 @@ void batchstore_putbatch(BatchStore* state, VectorBatch* batch)
 
 bool batchstore_getbatch(BatchStore* state, bool forward, VectorBatch* batch)
 {
+    if (batch == NULL || state == NULL) {
+        ereport(ERROR,
+            (errmodule(MOD_EXECUTOR), errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
+                errmsg("invalid batchstore state or batch")));
+    }
+
     batch->Reset();
     state->GetBatch(forward, batch);
 

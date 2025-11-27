@@ -540,6 +540,11 @@ void tuplestore_clear(Tuplestorestate* state)
 void tuplestore_end(Tuplestorestate* state)
 {
     int i;
+    if (state == NULL) {
+        ereport(ERROR,
+            (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("Tuplestore end failed: invalid state.")));
+    }
 
     if (state->myfile != NULL)
         BufFileClose(state->myfile);

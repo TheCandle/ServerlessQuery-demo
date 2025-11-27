@@ -896,7 +896,7 @@ static void extract_stmt_from_clause(const List *from_list, StmtCell *stmt_cell)
 
 static void extract_stmt_where_clause(Node *item_where, StmtCell *stmt_cell)
 {
-    if (IsA(item_where, SubLink)) {
+    if (item_where && IsA(item_where, SubLink)) {
         find_select_stmt(((SubLink *)item_where)->subselect, stmt_cell);
     }
     if (item_where && IsA(item_where, A_Expr)) {

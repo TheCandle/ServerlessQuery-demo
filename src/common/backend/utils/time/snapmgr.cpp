@@ -547,6 +547,9 @@ Snapshot GetTransactionSnapshot(bool force_local_snapshot)
             SnapshotSetCommandId(GetCurrentCommandId(false));
 #endif
         if (IS_EXRTO_STANDBY_READ) {
+            if (u_sess->utils_cxt.CurrentSnapshot == NULL) {
+                elog(ERROR, "invalid u_sess->utils_cxt.CurrentSnapshot.");
+            }
             t_thrd.pgxact->xmin = u_sess->utils_cxt.CurrentSnapshot->xmin;
             t_thrd.proc->exrto_min = u_sess->utils_cxt.CurrentSnapshot->read_lsn;
             t_thrd.proc->exrto_read_lsn = t_thrd.proc->exrto_min;
@@ -819,10 +822,10 @@ Snapshot CopySnapshotByCurrentMcxt(Snapshot snapshot)
  */
 static void FreeSnapshot(Snapshot snapshot)
 {
+    Assert(!(snapshot != NULL && snapshot->user_data != NULL));
     Assert(snapshot->regd_count == 0);
     Assert(snapshot->active_count == 0);
     Assert(snapshot->copied);
-    Assert(!(snapshot != NULL && snapshot->user_data != NULL));
     if (GTM_LITE_MODE && snapshot->prepared_array) {
         pfree_ext(snapshot->prepared_array);
     }

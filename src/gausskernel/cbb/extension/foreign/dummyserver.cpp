@@ -231,7 +231,7 @@ DummyServerOptions* getDummyServerOptionsFromCache(Oid serverOid)
     }
     LWLockRelease(dummyServerInfoCacheLock);
     if (found) {
-        int passWordLength = strlen(passWord);
+        int passWordLength = passWord ? strlen(passWord) : 0;
         errno_t rc = memset_s(passWord, passWordLength, 0, passWordLength);
         securec_check(rc, "\0", "\0");
         pfree_ext(passWord);

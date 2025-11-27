@@ -170,7 +170,8 @@ void QTNTernary(QTNode* in)
     for (i = 0; i < in->nchild; i++) {
         QTNode* cc = in->child[i];
 
-        if (cc->valnode->type == QI_OPR && in->valnode->qoperator.oper == cc->valnode->qoperator.oper) {
+        if (cc && cc->valnode &&
+            cc->valnode->type == QI_OPR && in->valnode->qoperator.oper == cc->valnode->qoperator.oper) {
             int oldnchild = in->nchild;
 
             in->nchild += cc->nchild - 1;

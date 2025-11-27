@@ -640,6 +640,10 @@ static void bayes_net_vars_initialize(TrainModelState *pstate, bayesState *bayes
 static void bayes_net_vars_delete(TrainModelState *pstate, bayesState *bayes_net_state,
                                   BayesNetTrainingVars *bayes_net_training_vars, Model *model)
 {
+    if (bayes_net_training_vars == NULL || bayes_net_state == NULL || pstate == NULL) {
+        elog(ERROR, "bayes_net_vars_delete: invalid params.");
+    }
+
     int nattrs = pstate->tuple.ncolumns;
     // free temp variables
     for (int i = 0; i < bayes_net_state->num_nodes; i++) {

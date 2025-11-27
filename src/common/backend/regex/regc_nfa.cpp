@@ -1155,8 +1155,9 @@ static struct state* single_color_transition(struct state* s1, struct state* s2)
     struct arc* a = NULL;
 
     /* Ignore leading EMPTY arc, if any */
-    if (s1->nouts == 1 && s1->outs->type == EMPTY)
+    if (s1->nouts == 1 && s1->outs != NULL && s1->outs->type == EMPTY) {
         s1 = s1->outs->to;
+    }
     /* Likewise for any trailing EMPTY arc */
     if (s2->nins == 1 && s2->ins->type == EMPTY)
         s2 = s2->ins->from;

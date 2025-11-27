@@ -140,6 +140,8 @@ THR_LOCAL int default_statistics_target = 100;
 #define ESTIMATE_BLOCK_FACTOR 0.65
 #define EPSILON 1.0E-06
 
+#define MAX_SAMPLE_ROWS (int64(MaxAllocSize / sizeof(HeapTuple)))
+
 /* maximum relative error fraction of histogram */
 #define ANALYZE_RELATIVE_ERROR ((double)(0.5))
 
@@ -706,6 +708,7 @@ static void caculate_target_rows(
     }
 
     *target_rows = rtl::min(*target_rows, workmem_allow_rows);  // sample rows must be less than workmem_allow_rows
+    *target_rows = rtl::min(*target_rows, MAX_SAMPLE_ROWS);
 
     /* attstattarget's value rely on final sample rows */
     attr->attstattarget = *target_rows / DEFAULT_EST_TARGET_ROWS;
@@ -3194,7 +3197,7 @@ static int64 AcquireSampleCStoreRows(Relation onerel, int elevel, HeapTuple* row
 {
     int64 numrows = 0;       /* # rows now in reservoir */
     int64 delta_numrows = 0; /* # delta rows now in reservoir */
-    int32 samplerows = 0;    /* total # rows collected */
+    int64 samplerows = 0;    /* total # rows collected */
     int64 liverows = 0;      /* # live rows seen */
     int64 deadrows = 0;      /* # dead rows seen */
     BlockNumber totalblocks = 0;

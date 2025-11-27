@@ -1745,6 +1745,11 @@ static void RelationBuildTupleDesc(Relation relation, bool onlyLoadInitDefVal)
         Form_pg_attribute attp;
  
         pg_attribute_tuple = SearchSysCache2(ATTNUM, ObjectIdGetDatum(RelationGetRelid(relation)), Int16GetDatum(0));
+        if (!HeapTupleIsValid(pg_attribute_tuple)) {
+            ereport(ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED),
+                errmsg("cache lookup failed for attribute %d of relation %u", 0, RelationGetRelid(relation)),
+                    errdetail("N/A"), errcause("System error."), erraction("Contact engineer to support.")));
+        }
         attp = (Form_pg_attribute)GETSTRUCT(pg_attribute_tuple);
         if (HeapTupleIsValid(pg_attribute_tuple)) {
             for (int i = 0; i < relation->rd_att->natts; i++) {
@@ -2643,6 +2648,12 @@ RelationInitBucketKey(Relation relation, HeapTuple tuple)
  */
 void RelationInitPhysicalAddr(Relation relation)
 {
+    if (!RelationIsValid(relation)) {
+        ereport(ERROR,
+            (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("relation init physical addr failed: invalid relation.")));
+    }
+
     relation->rd_node.spcNode = ConvertToRelfilenodeTblspcOid(relation->rd_rel->reltablespace);
     if (relation->rd_node.spcNode == GLOBALTABLESPACE_OID)
         relation->rd_node.dbNode = InvalidOid;
@@ -3700,6 +3711,12 @@ void RelationDestroyRls(Relation rel)
  */
 void RelationDestroyRelation(Relation relation, bool remember_tupdesc)
 {
+    if (!RelationIsValid(relation)) {
+        ereport(ERROR,
+            (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("Relation destroy relation failed: invalid relation.")));
+    }
+
     Assert(RelationHasReferenceCountZero(relation));
 
     /*
@@ -4990,6 +5007,11 @@ void DescTableSetNewRelfilenode(Oid relid, TransactionId freezeXid, bool partiti
  */
 void RelationSetNewRelfilenode(Relation relation, TransactionId freezeXid, MultiXactId minmulti, bool isDfsTruncate)
 {
+    if (!RelationIsValid(relation)) {
+        ereport(ERROR,
+            (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("Relation set new relfilenode failed: invalid relation.")));
+    }
     Oid newrelfilenode;
     RelFileNodeBackend newrnode;
     Relation pg_class;

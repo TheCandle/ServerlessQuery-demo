@@ -120,6 +120,11 @@ Partition LocalPartDefCache::SearchPartition(Oid part_oid)
 
 void LocalPartDefCache::RemovePartition(Partition part)
 {
+    if (part == NULL || part->entry == NULL) {
+        ereport(ERROR,
+            (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("remove partition failed: invalid part.")));
+    }
     m_bucket_list.RemoveElemFromBucket(&part->entry->cache_elem);
     pfree_ext(part->entry);
 }

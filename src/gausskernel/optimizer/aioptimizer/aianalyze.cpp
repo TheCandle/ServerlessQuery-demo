@@ -89,7 +89,7 @@ bool StatsModel::create_model(const char *model_name, HyperparameterValues *hype
     bool found = false;
     AboModelCacheEntry *cache = (AboModelCacheEntry *)hash_search(g_instance.abo_cxt.models, (void *)model_name,
         HASH_REMOVE, &found);
-    if (found) {
+    if (found && cache->model) {
         pfree_ext(cache->model->bayesNetModel);
         MemoryContextDelete(cache->model->mcontext);
         pfree_ext(cache->model);
@@ -372,9 +372,10 @@ static void prepare_samplerows(
     initStringInfo(&str);
 
     appendStringInfo(&str,
-        "select %s, v_count from %s;",
+        "select %s, v_count from %s limit %d;",
         es_get_column_name_alias(spec, ES_COLUMN_ALIAS),
-        quote_identifier(tableName));
+        quote_identifier(tableName),
+        MAX_SUPPORT_NUMROWS + 1);
 
     result.num_cols = spec->stats->num_attrs + 1;
     result.output = spiResult;

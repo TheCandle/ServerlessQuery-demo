@@ -182,6 +182,7 @@ static IpcSemaphoreId IpcSemaphoreCreate(int numSems)
     IpcSemaphoreId semId;
     union semun semun;
     PGSemaphoreData mysema;
+    (void)memset_s(&mysema, sizeof(PGSemaphoreData), 0, sizeof(PGSemaphoreData));
 
     /* Loop till we find a free IPC key */
     for (nextSemaKey++;; nextSemaKey++) {

@@ -298,6 +298,10 @@ static int resolve_symlinks(char* path)
         } else { /* relative path */
             /* find its directory holding current link file */
             char* lsep = last_dir_separator(tmp_path);
+            if (lsep == NULL) {
+                log_error(_("invalid path structure for symbolic link \"%s\""), tmp_path);
+                return -1;
+            }
             *lsep = '\0';
             /* find this absolute path for real file */
             join_path_components(tmp_path, tmp_path, link_buf);

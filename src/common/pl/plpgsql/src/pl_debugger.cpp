@@ -188,7 +188,7 @@ void check_debug(PLpgSQL_function* func, PLpgSQL_execstate* estate)
                 func->debug->cur_opt = DEBUG_CONTINUE_HEADER_AFTER;
             }
         } else {
-            if (entry != NULL) {
+            if (found) {
                 entry->func = func;
             }
             /* maintain session's debug server is on base turn on function */

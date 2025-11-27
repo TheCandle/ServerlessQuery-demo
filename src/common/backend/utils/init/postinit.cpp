@@ -2145,6 +2145,9 @@ void PostgresInitializer::InitLoadLocalSysCache(Oid db_oid, const char *db_name)
         /* local_sysdb_resowner never be freed until proc exit */
         t_thrd.utils_cxt.CurrentResourceOwner = t_thrd.lsc_cxt.local_sysdb_resowner;
         Assert(u_sess->proc_cxt.MyDatabaseId != InvalidOid);
+        if (t_thrd.lsc_cxt.lsc == NULL) {
+            elog(ERROR, "invalid t_thrd.lsc_cxt.lsc.");
+        }
         t_thrd.lsc_cxt.lsc->ClearSysCacheIfNecessary(db_oid, db_name);
         InitFileAccess();
 
@@ -2184,7 +2187,9 @@ void PostgresInitializer::InitLoadLocalSysCache(Oid db_oid, const char *db_name)
 
         /* recovery CurrentResourceOwner */
         t_thrd.utils_cxt.CurrentResourceOwner = currentOwner;
-        t_thrd.lsc_cxt.lsc->LocalSysDBCacheReSet();
+        if (t_thrd.lsc_cxt.lsc != NULL) {
+            t_thrd.lsc_cxt.lsc->LocalSysDBCacheReSet();
+        }
         AbortBufferIO();
         PG_RE_THROW();
     }

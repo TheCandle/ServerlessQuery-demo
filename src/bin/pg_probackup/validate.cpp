@@ -162,8 +162,6 @@ pgBackupValidate(pgBackup *backup, pgRestoreParams *params)
     join_path_components(dss_path, backup->root_dir, DSSDATA_DIR);
     join_path_components(external_prefix, backup->root_dir, EXTERNAL_DIR);
     files = get_backup_filelist(backup, false);
-    g_totalFiles = parray_num(files);
-
     if (!files)
     {
         elog(WARNING, "Backup %s file list is corrupted", base36enc(backup->start_time));
@@ -172,6 +170,7 @@ pgBackupValidate(pgBackup *backup, pgRestoreParams *params)
         return;
     }
 
+    g_totalFiles = parray_num(files);
     /* setup threads */
     for (i = 0; i < g_totalFiles; i++)
     {

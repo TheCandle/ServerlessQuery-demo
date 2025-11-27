@@ -259,8 +259,9 @@ bool Processor::run_pre_insert_statement(const InsertStmt * const insert_stmt,
         statement_data);
     RETURN_IF(!ret, false);
 
-    return ValuesProcessor::process_values(statement_data, &cached_columns_temp, list_length(select_stmt->valuesLists),
-        &raw_values_list);
+    return (select_stmt == NULL) ? false :
+        ValuesProcessor::process_values(statement_data, &cached_columns_temp, list_length(select_stmt->valuesLists),
+            &raw_values_list);
 }
 
 bool Processor::deal_order_by_statement(const SelectStmt * const select_stmt, ICachedColumns *select_cached_columns,
@@ -1864,6 +1865,9 @@ bool Processor::run_pre_set_statement(const VariableSetStmt *set_stmt, Statement
         }
         current_statement->cacheRefresh |= CacheRefreshType::SEARCH_PATH;
     } else if (set_stmt->kind == VAR_SET_ROLEPWD) {
+        if (current_statement == NULL) {
+            return false;
+        }
         statement_data->conn->client_logic->val_to_update |= updateGucValues::GUC_ROLE;
         current_statement->cacheRefresh |= CacheRefreshType::CACHE_ALL;
         statement_data->conn->client_logic->tmpGucParams.role = strVal(&((A_Const *)(linitial(set_stmt->args)))->val);

@@ -5196,7 +5196,14 @@ static int exec_stmt_assign(PLpgSQL_execstate* estate, PLpgSQL_stmt_assign* stmt
  */
 static int exec_stmt_perform(PLpgSQL_execstate* estate, PLpgSQL_stmt_perform* stmt)
 {
-    if (stmt->expr != NULL && stmt->expr->query != NULL) {
+    if (stmt == NULL || stmt->expr == NULL) {
+        ereport(ERROR,
+            (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+            errmodule(MOD_PLSQL),
+            errmsg("stmt or stmt expr is NULL in exec_stmt_perform.")));
+    }
+
+    if (stmt->expr->query != NULL) {
         record_plsql_action(stmt->expr->query, estate->func);
     }
     TransactionId oldTransactionId = SPI_get_top_transaction_id();
@@ -7892,6 +7899,13 @@ static void exec_prepare_plan(PLpgSQL_execstate* estate, PLpgSQL_expr* expr, int
  */
 static int exec_stmt_execsql(PLpgSQL_execstate* estate, PLpgSQL_stmt_execsql* stmt)
 {
+    if (stmt == NULL || stmt->sqlstmt == NULL) {
+        ereport(ERROR,
+            (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+            errmodule(MOD_PLSQL),
+            errmsg("stmt or sqlstmt is NULL in exec_stmt_execsql.")));
+    }
+
     if (stmt->sqlstmt != NULL && stmt->sqlstmt->query != NULL) {
         record_plsql_action(stmt->sqlstmt->query, estate->func);
     }
@@ -9207,13 +9221,13 @@ static int exec_stmt_open(PLpgSQL_execstate* estate, PLpgSQL_stmt_open* stmt)
      * Open the cursor
      */
     portal = SPI_cursor_open_with_paramlist(curname, query->plan, paramLI, estate->readonly_func, isCollectParam);
-    instr_stmt_report_query_plan(portal->queryDesc);
     if (portal == NULL) {
         ereport(ERROR,
             (errcode(ERRCODE_UNDEFINED_CURSOR),
                 errmodule(MOD_PLSQL),
                 errmsg("could not open cursor: %s", SPI_result_code_string(SPI_result))));
     }
+    instr_stmt_report_query_plan(portal->queryDesc);
 
     /*
      * If cursor variable was NULL, store the generated portal name in it
@@ -12761,7 +12775,10 @@ static bool exec_eval_simple_expr(
         u_sess->SPI_cxt.cur_tableof_index->tableOfGetNestLayer =
             (execTableOfIndexInfo.tableOfLayers > 0 && IsA(expr->expr_simple_state->expr, Param)) ? 0 : -1;
     }
-    plpgsql_estate->curr_nested_table_type = InvalidOid;
+
+    if (plpgsql_estate) {
+        plpgsql_estate->curr_nested_table_type = InvalidOid;
+    }
 
     *result = ExecEvalExpr(expr->expr_simple_state, econtext, isNull);
     /* for nested table, we need use nested table type as result type */

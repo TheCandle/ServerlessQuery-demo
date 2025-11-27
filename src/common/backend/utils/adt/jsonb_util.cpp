@@ -598,7 +598,7 @@ pushJsonbValueScalar(JsonbParseState **pstate, int seq, JsonbValue *scalarVal)
             (*pstate)->contVal.object.pairs = (JsonbPair*)palloc(sizeof(JsonbPair) * (*pstate)->size);
             break;
         case WJB_KEY:
-            Assert(scalarVal->type == jbvString);
+            Assert(scalarVal && scalarVal->type == jbvString);
             appendKey(*pstate, scalarVal);
             break;
         case WJB_VALUE:

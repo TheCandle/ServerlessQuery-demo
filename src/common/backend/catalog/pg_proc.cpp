@@ -1115,7 +1115,7 @@ ObjectAddress ProcedureCreate(const char* procedureName, Oid procNamespace, Oid 
                     get_namespace_name(procNamespace))));
     }
 
-    parameterCount = parameterTypes->dim1;
+    parameterCount = parameterTypes ? parameterTypes->dim1 : -1;
     if (parameterCount < 0 || parameterCount > FUNC_MAX_ARGS)
         ereport(ERROR,
             (errcode(ERRCODE_TOO_MANY_ARGUMENTS),

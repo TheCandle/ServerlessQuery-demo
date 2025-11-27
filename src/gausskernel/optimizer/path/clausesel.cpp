@@ -666,7 +666,7 @@ Selectivity clause_selectivity(PlannerInfo* root, Node* clause, int varRelid, Jo
          * to take acount of the effect of different Vars (e.g. t1.a = 1 or t2.b = 1) on single Vars.
          * Therefore, or clauses is ignored for var ratio cache for now.
          */
-    } else if (is_opclause(clause) || IsA(clause, DistinctExpr)) {
+    } else if (is_opclause(clause) || (clause && IsA(clause, DistinctExpr))) {
         OpExpr* opclause = (OpExpr*)clause;
         Oid opno = opclause->opno;
 

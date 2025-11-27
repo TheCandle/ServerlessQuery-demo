@@ -28,6 +28,9 @@
 using namespace std;
 void InsertElemSortTopN(WLMTopDnList** head, WLMTopDnList** elem, int topN)
 {
+    if (elem == NULL || *elem == NULL) {
+        return;
+    }
     WLMTopDnList* p1 = NULL;
     WLMTopDnList* prep1 = NULL;
     WLMTopDnList* ppre = NULL;

@@ -379,7 +379,7 @@ void mc_elog(int elevel, const char* format, ...)
 #define MSGLEN 8192
 
     if (g_instance.comm_cxt.commutil_cxt.ut_libcomm_test || 
-        elevel < u_sess->attr.attr_common.log_min_messages) {
+        (u_sess && elevel < u_sess->attr.attr_common.log_min_messages)) {
         return;
     }
 

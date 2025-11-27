@@ -1886,6 +1886,10 @@ static void stringzone(char* result, int result_size, const struct zone* zpfirst
         return;
     }
     (void)strcat(result, ",");
+    if (stdrp == NULL) {
+        result[0] = '\0';
+        return;
+    }
     if (stringrule(result, stdrp, dstrp->r_stdoff, zp->z_gmtoff) != 0) {
         result[0] = '\0';
         return;

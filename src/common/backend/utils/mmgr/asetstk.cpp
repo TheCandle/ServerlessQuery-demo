@@ -469,6 +469,7 @@ template <bool is_tracked>
 void StackMemoryAllocator::AllocSetDelete(MemoryContext context)
 {
     StackSet set = (StackSet)context;
+    AssertArg(AllocSetIsValid(set));
     StackBlock block = set->blocks;
     MemoryProtectFuncDef* func = NULL;
 
@@ -476,8 +477,6 @@ void StackMemoryAllocator::AllocSetDelete(MemoryContext context)
         func = &SessionFunctions;
     else
         func = &GenericFunctions;
-
-    AssertArg(AllocSetIsValid(set));
 
 #ifdef MEMORY_CONTEXT_CHECKING
     /* Check for corruption and leaks before freeing */

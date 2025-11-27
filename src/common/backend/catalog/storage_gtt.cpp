@@ -1327,6 +1327,10 @@ static void gtt_free_statistics(gtt_local_hash_entry* entry)
     int i;
 
     for (i = 0; i < entry->natts; i++) {
+        if (entry->att_stat_tups == NULL) {
+            break;
+        }
+
         if (entry->att_stat_tups[i]) {
             heap_freetuple(entry->att_stat_tups[i]);
             entry->att_stat_tups[i] = NULL;

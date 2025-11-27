@@ -10874,6 +10874,8 @@ static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int n
         /* find key expression in tlist */
         AttrNumber keyresno = keycols[keyno];
         TargetEntry* target = get_tle_by_resno(plan->targetlist, keyresno);
+        if (target == NULL)
+            ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("no tlist entry for key %d", keyresno)));
 
         /*
          * Start/With support
@@ -10886,9 +10888,6 @@ static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int n
         }
 
         char* exprstr = NULL;
-
-        if (target == NULL)
-            ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("no tlist entry for key %d", keyresno)));
         /* Deparse the expression, showing any top-level cast */
         exprstr = deparse_expression((Node*)target->expr, context, useprefix, true);
         resetStringInfo(&sortkeybuf);

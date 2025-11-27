@@ -526,8 +526,8 @@ void unserializePartitionStringAttribute(Const** outMaxValue, int outMaxValueLen
     /* unstransform string items to Value list */
     boundary = untransformPartitionBoundary(attribute_raw_value);
 
-    Assert(boundary->length == partKeyAttrNo->dim1);
-    Assert(boundary->length <= MAX_RANGE_PARTKEY_NUMS);
+    Assert(list_length(boundary) == partKeyAttrNo->dim1);
+    Assert(list_length(boundary) <= MAX_RANGE_PARTKEY_NUMS);
 
     /* Now, for each max value item, call it's typin function, save it in datum */
     counter = 0;
@@ -676,7 +676,7 @@ void unserializeHashPartitionAttribute(Const** hashBuckets, int outMaxValueLen,
     /* unstransform string items to Value list */
     boundary = untransformPartitionBoundary(attribute_raw_value);
 
-    Assert(boundary->length == partKeyAttrNo->dim1);
+    Assert(list_length(boundary) == partKeyAttrNo->dim1);
 
     /* Now, for each max value item, call it's typin function, save it in datum */
     counter = 0;
@@ -1363,6 +1363,10 @@ void DestroyListElements(ListPartElement* src, int elementNum)
     int j = 0;
     Const* value = NULL;
     ListPartElement* part = NULL;
+    if (src == NULL || elementNum <= 0) {
+        ereport(ERROR,
+            (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Destroy list element failed.")));
+    }
 
     for (i = 0; i < elementNum; i++) {
         part = &(src[i]);
@@ -1686,7 +1690,7 @@ static void BuildElementForPartKeyExpr(void* element, HeapTuple partTuple, int p
     }
     boundary = untransformPartitionBoundary(boundaryRawVal);
     if (PART_STRATEGY_RANGE == partstrategy) {
-        Assert(boundary->length == 1);
+        Assert(list_length(boundary) == 1);
         rangeEle = (RangeElement*)element;
         rangeEle->isInterval = false;
         rangeEle->len = 1;

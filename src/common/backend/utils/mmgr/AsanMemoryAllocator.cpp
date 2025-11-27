@@ -415,6 +415,7 @@ template <bool enableMemoryProtect, bool isShared, bool isTracked>
 void AsanMemoryAllocator::AllocSetDelete(MemoryContext context)
 {
     AsanSet set = (AsanSet)context;
+    AssertArg(AsanSetIsValid(set));
     AsanBlock block = set->blocks;
     MemoryProtectFuncDef* func = NULL;
 
