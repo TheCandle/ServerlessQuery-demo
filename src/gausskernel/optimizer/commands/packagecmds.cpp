@@ -59,6 +59,7 @@
 #include "utils/syscache.h"
 #include "utils/lsyscache.h"
 #include "tcop/utility.h"
+#include "catalog/pg_authid.h"
 
 
 static void create_package_error_callback(void *arg)
