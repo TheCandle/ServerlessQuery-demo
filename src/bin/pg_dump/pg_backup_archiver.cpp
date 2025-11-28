@@ -1057,7 +1057,8 @@ size_t WriteData(Archive* AHX, const void* data, size_t dLen)
 /* Public */
 void ArchiveEntry(Archive* AHX, CatalogId catalogId, DumpId dumpId, const char* tag, const char* nmspace,
     const char* tablespace, const char* owner, bool withOids, const char* desc, teSection section, const char* defn,
-    const char* dropStmt, const char* copyStmt, const DumpId* deps, int nDeps, DataDumperPtr dumpFn, void* dumpArg)
+    const char* dropStmt, const char* copyStmt, const DumpId* deps, int nDeps, DataDumperPtr dumpFn, void* dumpArg,
+    const char* alterStmt)
 {
     ArchiveHandle* AH = (ArchiveHandle*)AHX;
     TocEntry* newToc = NULL;
@@ -1087,6 +1088,7 @@ void ArchiveEntry(Archive* AHX, CatalogId catalogId, DumpId dumpId, const char* 
     newToc->defn = gs_strdup(defn);
     newToc->dropStmt = gs_strdup(dropStmt);
     newToc->copyStmt = copyStmt != NULL ? gs_strdup(copyStmt) : NULL;
+    newToc->alterStmt = alterStmt != NULL ? gs_strdup(alterStmt) : NULL;
 
     if (nDeps > 0) {
         newToc->dependencies = (DumpId*)pg_malloc(nDeps * sizeof(DumpId));
@@ -2431,6 +2433,7 @@ void WriteToc(ArchiveHandle* AH)
         (void)WriteStr(AH, te->tablespace);
         (void)WriteStr(AH, te->owner);
         (void)WriteStr(AH, te->withOids ? "true" : "false");
+        (void)WriteStr(AH, te->alterStmt);
 
         /* Dump list of dependencies */
         for (i = 0; i < te->nDeps; i++) {
@@ -2544,6 +2547,10 @@ void ReadToc(ArchiveHandle* AH)
             tmp = NULL;
         } else
             te->withOids = true;
+
+        if (AH->version >= K_VERS_1_13) {
+            te->alterStmt = ReadStr(AH);
+        }
 
         /* Read TOC entry dependencies */
         if (AH->version >= K_VERS_1_5) {
@@ -3387,6 +3394,9 @@ static void _printTocEntry(ArchiveHandle* AH, TocEntry* te, RestoreOptions* ropt
         }
     } else {
         if (strlen(te->defn) > 0) {
+            if (strcmp(te->desc, "TRIGGER") == 0 && !ropt->single_txn) {
+                (void)ahprintf(AH, "BEGIN;\n");
+            }
             (void)ahprintf(AH, "%s\n\n", te->defn);
         }
     }
@@ -3438,6 +3448,13 @@ static void _printTocEntry(ArchiveHandle* AH, TocEntry* te, RestoreOptions* ropt
 
             (void)ahprintf(AH, "%s\n\n", temp->data);
             (void)destroyPQExpBuffer(temp);
+        } else if (strcmp(te->desc, "TRIGGER") == 0) {
+            PQExpBuffer temp = createPQExpBuffer();
+            (void)appendPQExpBuffer(temp, "%s", te->alterStmt);
+            (void)ahprintf(AH, "%s\n\n", temp->data);
+            (void)destroyPQExpBuffer(temp);
+            free(te->alterStmt);
+            te->alterStmt = NULL;
         } else if (strcmp(te->desc, "CAST") == 0 || strcmp(te->desc, "CHECK CONSTRAINT") == 0 ||
                    strcmp(te->desc, "CONSTRAINT") == 0 || strcmp(te->desc, "DEFAULT") == 0 ||
                    strcmp(te->desc, "FK CONSTRAINT") == 0 || strcmp(te->desc, "INDEX") == 0 ||
@@ -3448,6 +3465,10 @@ static void _printTocEntry(ArchiveHandle* AH, TocEntry* te, RestoreOptions* ropt
         } else {
             write_msg(modulename, "WARNING: don't know how to set owner for object type %s\n", te->desc);
         }
+    }
+
+    if (strlen(te->defn) > 0 && strcmp(te->desc, "TRIGGER") == 0 && !ropt->single_txn) {
+        (void)ahprintf(AH, "COMMIT;\n\n");
     }
 
     /*
