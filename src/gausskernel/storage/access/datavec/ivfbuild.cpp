@@ -1500,6 +1500,7 @@ void TrainRefine(IvfflatBuildState *buildstate)
         return;
     }
     double num;
+    EstimateRows(buildstate->heap, &num);
     int numSamples = (int)num;
     if (numSamples == 0) {
         buildstate->rbqDelayState = RBQ_BUILD_DELAY;
@@ -1558,6 +1559,10 @@ void BuildIndex(Relation heap, Relation index, IndexInfo *indexInfo, IvfflatBuil
     ComputeCenters(buildstate);
 
     if (buildstate->enableRabitQ) {
+        if (t_thrd.proc->workingVersionNum < RABITQ_VERSION_NUM) {
+            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+            errmsg("Before RABITQ_VERSION_NUM VERSION NUM %u, we do not support rabitq.", RABITQ_VERSION_NUM)));
+        }
         buildstate->rbqDelayState = insert ? RBQ_BUILD_AFTER_DELAY : RBQ_BUILD_NORMAL;
         int dim = buildstate->dimensions;
         TrainRefine(buildstate);

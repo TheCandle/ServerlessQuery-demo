@@ -1,16 +1,31 @@
 /*
- * Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ * This file contains code from different sources, governed by different open source licenses.
  *
- * openGauss is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * 1. Code originating from the PostgreSQL project:
+ *    - Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ *    - This code is licensed under the PostgreSQL License.
+ *    - Permission is granted to use, copy, modify, and distribute this software in source and binary forms,
+ *      provided that the above copyright notice, this condition list, and the following disclaimer
+ *      are retained in source distributions, and reproduced in documentation/material provided with
+ *      binary distributions.
  *
- *          http://license.coscl.org.cn/MulanPSL2
+ * 2. Modifications and new code by Huawei Technologies Co., Ltd.:
+ *    - Portions Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ *    - This code is licensed under the Mulan Permissive Software License, Version 2 (Mulan PSL v2).
+ *    - Full license text available at: http://license.coscl.org.cn/MulanPSL2
  *
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PSL v2 for more details.
+ * 3. General Disclaimer (as required by the PostgreSQL License):
+ *    - THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+ *      OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ *      AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ *      CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *      DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *      DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *      IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ *      OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * By using this file, you acknowledge that you must comply with all applicable terms of both the
+ * PostgreSQL License and the Mulan PSL v2 for the respective code portions you utilize.
  * -------------------------------------------------------------------------
  *
  * hnswbuild.cpp
@@ -201,247 +216,6 @@ static int ComputeHnswPQ(HnswBuildState *buildstate)
     MemoryContextSwitchTo(oldCtx);
     MemoryContextDelete(pqCtx);
     return res;
-}
-
-BlockNumber BlockSamplerGetBlock(BlockSampler bs)
-{
-    if (BlockSampler_HasMore(bs)) {
-        return BlockSampler_Next(bs);
-    }
-    return InvalidBlockNumber;
-}
-
-static void EstimateRows(Relation onerel, double *totalrows)
-{
-    int64 targrows = HNSWPQ_DEFAULT_TARGET_ROWS * abs(default_statistics_target);
-    int64 numrows = 0;      /* # rows now in reservoir */
-    double samplerows = 0;  /* total # rows collected */
-    double liverows = 0;    /* # live rows seen */
-    double deadrows = 0;    /* # dead rows seen */
-    double rowstoskip = -1; /* -1 means not set yet */
-    BlockNumber totalblocks;
-    TransactionId OldestXmin;
-    BlockSamplerData bs;
-    double rstate;
-    BlockNumber targblock = 0;
-    BlockNumber sampleblock = 0;
-    bool estimateTableRownum = false;
-    bool isAnalyzing = true;
-
-    totalblocks = RelationGetNumberOfBlocks(onerel);
-    OldestXmin = GetOldestXmin(onerel);
-    /* Prepare for sampling block numbers */
-    BlockSampler_Init(&bs, totalblocks, targrows);
-    /* Prepare for sampling rows */
-    rstate = anl_init_selection_state(targrows);
-
-    while (InvalidBlockNumber != (targblock = BlockSamplerGetBlock(&bs))) {
-        Buffer targbuffer;
-        Page targpage;
-        OffsetNumber targoffset, maxoffset;
-
-        vacuum_delay_point();
-        sampleblock++;
-
-        targbuffer = ReadBufferExtended(onerel, MAIN_FORKNUM, targblock, RBM_NORMAL, NULL);
-        LockBuffer(targbuffer, BUFFER_LOCK_SHARE);
-        targpage = BufferGetPage(targbuffer);
-
-        if (RelationIsUstoreFormat(onerel)) {
-            for (int i = 0; i < onerel->rd_att->natts; i++) {
-                if (onerel->rd_att->attrs[i].attcacheoff >= 0) {
-                    onerel->rd_att->attrs[i].attcacheoff = -1;
-                }
-            }
-
-            TupleTableSlot *slot = MakeSingleTupleTableSlot(RelationGetDescr(onerel), false, onerel->rd_tam_ops);
-            maxoffset = UHeapPageGetMaxOffsetNumber(targpage);
-
-            /* Inner loop over all tuples on the selected page */
-            for (targoffset = FirstOffsetNumber; targoffset <= maxoffset; targoffset++) {
-                RowPtr *lp = UPageGetRowPtr(targpage, targoffset);
-                bool sampleIt = false;
-                TransactionId xid;
-                UHeapTuple targTuple;
-                if (RowPtrIsDeleted(lp)) {
-                    deadrows += 1;
-                    continue;
-                }
-                if (!RowPtrIsNormal(lp)) {
-                    if (RowPtrIsDeleted(lp)) {
-                        deadrows += 1;
-                    }
-                    continue;
-                }
-
-                if (!RowPtrHasStorage(lp)) {
-                    continue;
-                }
-
-                /* Allocate memory for target tuple. */
-                targTuple = UHeapGetTuple(onerel, targbuffer, targoffset);
-
-                switch (UHeapTupleSatisfiesOldestXmin(targTuple, OldestXmin,
-                    targbuffer, true, &targTuple, &xid, NULL, onerel)) {
-                    case UHEAPTUPLE_LIVE:
-                        sampleIt = true;
-                        liverows += 1;
-                        break;
-
-                    case UHEAPTUPLE_DEAD:
-                    case UHEAPTUPLE_RECENTLY_DEAD:
-                        /* Count dead and recently-dead rows */
-                        deadrows += 1;
-                        break;
-
-                    case UHEAPTUPLE_INSERT_IN_PROGRESS:
-                        if (TransactionIdIsCurrentTransactionId(xid)) {
-                            sampleIt = true;
-                            liverows += 1;
-                        }
-                        break;
-
-                    case UHEAPTUPLE_DELETE_IN_PROGRESS:
-                        if (TransactionIdIsCurrentTransactionId(xid)) {
-                            deadrows += 1;
-                        } else {
-                            liverows += 1;
-                        }
-                        break;
-
-                    default:
-                        elog(ERROR, "unexpected UHeapTupleSatisfiesOldestXmin result");
-                        break;
-                }
-
-                if (sampleIt) {
-                    ExecStoreTuple(targTuple, slot, InvalidBuffer, false);
-
-                    if (numrows >= targrows) {
-                        if (rowstoskip < 0) {
-                            rowstoskip = anl_get_next_S(samplerows, targrows, &rstate);
-                        }
-                        if (rowstoskip <= 0) {
-                            int64 k = (int64)(targrows * anl_random_fract());
-
-                            AssertEreport(k >= 0 && k < targrows, MOD_OPT,
-                                "Index number out of range when replacing tuples.");
-                        }
-                        rowstoskip -= 1;
-                    }
-                    samplerows += 1;
-                }
-
-                /* Free memory for target tuple. */
-                if (targTuple) {
-                    UHeapFreeTuple(targTuple);
-                }
-            }
-
-            /* Now release the lock and pin on the page */
-            ExecDropSingleTupleTableSlot(slot);
-
-            for (int i = 0; i < onerel->rd_att->natts; i++) {
-                if (onerel->rd_att->attrs[i].attcacheoff >= 0) {
-                    onerel->rd_att->attrs[i].attcacheoff = -1;
-                }
-            }
-
-            goto uheap_end;
-        }
-
-        maxoffset = PageGetMaxOffsetNumber(targpage);
-        /* Inner loop over all tuples on the selected page */
-        for (targoffset = FirstOffsetNumber; targoffset <= maxoffset; targoffset++) {
-            ItemId itemid;
-            HeapTupleData targtuple;
-            bool sample_it = false;
-
-            /* IO collector and IO scheduler for analyze statement */
-            if (ENABLE_WORKLOAD_CONTROL)
-                IOSchedulerAndUpdate(IO_TYPE_READ, 10, IO_TYPE_ROW);
-
-            targtuple.t_tableOid = InvalidOid;
-            targtuple.t_bucketId = InvalidBktId;
-            HeapTupleCopyBaseFromPage(&targtuple, targpage);
-            itemid = PageGetItemId(targpage, targoffset);
-
-            if (!ItemIdIsNormal(itemid)) {
-                if (ItemIdIsDead(itemid))
-                    deadrows += 1;
-                continue;
-            }
-
-            ItemPointerSet(&targtuple.t_self, targblock, targoffset);
-
-            targtuple.t_tableOid = RelationGetRelid(onerel);
-            targtuple.t_bucketId = RelationGetBktid(onerel);
-            targtuple.t_data = (HeapTupleHeader)PageGetItem(targpage, itemid);
-            targtuple.t_len = ItemIdGetLength(itemid);
-
-            switch (HeapTupleSatisfiesVacuum(&targtuple, OldestXmin, targbuffer, isAnalyzing)) {
-                case HEAPTUPLE_LIVE:
-                    sample_it = true;
-                    liverows += 1;
-                    break;
-
-                case HEAPTUPLE_DEAD:
-                case HEAPTUPLE_RECENTLY_DEAD:
-                    /* Count dead and recently-dead rows */
-                    deadrows += 1;
-                    break;
-
-                case HEAPTUPLE_INSERT_IN_PROGRESS:
-                    if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(targpage, targtuple.t_data))) {
-                        sample_it = true;
-                        liverows += 1;
-                    }
-                    break;
-
-                case HEAPTUPLE_DELETE_IN_PROGRESS:
-                    if (TransactionIdIsCurrentTransactionId(HeapTupleGetUpdateXid(&targtuple)))
-                        deadrows += 1;
-                    else {
-                        sample_it = true;
-                        liverows += 1;
-                    }
-                    break;
-
-                default:
-                    ereport(
-                        ERROR, (errcode(ERRCODE_CASE_NOT_FOUND), errmsg("unexpected HeapTupleSatisfiesVacuum result")));
-                    break;
-            }
-
-            if (sample_it) {
-                if (numrows < targrows) {
-                    if (estimateTableRownum) {
-                        numrows++;
-                    }
-                } else {
-                    if (rowstoskip < 0) {
-                        rowstoskip = anl_get_next_S(samplerows, targrows, &rstate);
-                    }
-
-                    if (rowstoskip <= 0) {
-                        int64 k = (int64)(targrows * anl_random_fract());
-                        AssertEreport(
-                            k >= 0 && k < targrows, MOD_OPT, "Index number out of range when replacing tuples.");
-                    }
-                    rowstoskip -= 1;
-                }
-                samplerows += 1;
-            }
-        }
-
-uheap_end:
-        UnlockReleaseBuffer(targbuffer);
-    }
-    if (bs.m > 0) {
-        *totalrows = floor((liverows / bs.m) * totalblocks + 0.5);
-    } else {
-        *totalrows = 0.0;
-    }
 }
 
 /*

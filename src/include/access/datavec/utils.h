@@ -24,6 +24,8 @@
 #define HALF_L2_FUNC_OID 8644
 #define HALF_IP_FUNC_OID 8493
 #define CHUNK_STORAGE_SIZE (uint16)(6 * 1024)
+#define DEFAULT_TARGET_ROWS 300
+#define TUPLE_NUM 100
 #define IS_HALFVEC(oid) (oid == HALF_L2_FUNC_OID || oid == HALF_IP_FUNC_OID)
 
 enum RefineType {
@@ -48,6 +50,24 @@ typedef struct PQParams {
     size_t subItemSize;
     char *pqTable;
 } PQParams;
+
+/* Sampling context structure */
+typedef struct {
+    Relation onerel;          /* Relation being sampled */
+    Buffer targbuffer;        /* Current buffer */
+    Page targpage;            /* Current page */
+    BlockNumber targblock;    /* Current block number */
+    TransactionId OldestXmin; /* Oldest transaction ID */
+    double liverows;          /* Number of live rows */
+    double deadrows;          /* Number of dead rows */
+    double samplerows;        /* Number of sampled rows */
+    int64 targrows;           /* Target number of rows to sample */
+    int64 numrows;            /* Current number of sampled rows */
+    double rowstoskip;        /* Number of rows to skip */
+    double rstate;           /* Random state for sampling */
+    bool isAnalyzing;         /* Whether we're analyzing */
+    bool estimateTableRownum;  /* Whether to estimate table row count */
+} SamplingContext;
 
 #define VECTOR_ARRAY_SIZE(_length, _size) (sizeof(VectorArrayData) + (_length) * MAXALIGN(_size))
 
@@ -89,6 +109,7 @@ VectorArray VectorArrayInit(int maxlen, int dimensions, Size itemsize);
 void VectorArrayFree(VectorArray arr);
 HeapTuple GetTupleFromHeap(Relation relation, ItemPointer tid);
 void GetTupleFromHeap(Relation relation, ItemPointer tid, HeapTuple tuple);
+void EstimateRows(Relation onerel, double *totalrows);
 int GetFunctionType(FmgrInfo* procinfo, FmgrInfo* normprocinfo);
 int PQInit();
 void PQUinit();
