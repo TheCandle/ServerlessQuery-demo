@@ -24,6 +24,7 @@
 #include "access/sysattr.h"
 #include "access/transam.h"
 #include "access/datavec/hnsw.h"
+#include "access/datavec/ivfflat.h"
 #include "catalog/catalog.h"
 #include "catalog/pg_partition_fn.h"
 #include "catalog/pg_statistic.h"
@@ -522,6 +523,15 @@ void get_relation_info(PlannerInfo* root, Oid relationObjectId, bool inhparent, 
                 }
             }
 
+            if (indexRelation->rd_rel->relam == IVFFLAT_AM_OID) {
+                int rbqDelayState;
+                IvfflatGetRbqInfoFromMetaPage(indexRelation, NULL, NULL, NULL, NULL, NULL, NULL,
+                                           NULL, NULL, &rbqDelayState, NULL);
+                if (rbqDelayState == RBQ_BUILD_DELAY) {
+                    index_close(indexRelation, NoLock);
+                    continue;
+                }
+            }
 
             /*
              * If the index is valid, but cannot yet be used, ignore it; but
