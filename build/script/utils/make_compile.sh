@@ -81,6 +81,16 @@ function get_version_mode()
 }
 
 #######################################################################
+## set blocksize=4096 into version.cfg. Default 8192 no need to set.
+#######################################################################
+function get_blocksize_mode()
+{
+    if [ "$block_size"x == "4096"x ]; then
+        echo "blocksize=4096" >> ${SCRIPT_DIR}/version.cfg
+    fi
+}
+
+#######################################################################
 ## generate the version file.
 #######################################################################
 function make_license_control()
@@ -338,6 +348,7 @@ function install_gaussdb()
     dos2unix ${BUILD_DIR}/bin/cluster_guc.conf > /dev/null 2>&1
     get_kernel_commitid
     get_version_mode
+    get_blocksize_mode
 }
 
 #######################################################################
