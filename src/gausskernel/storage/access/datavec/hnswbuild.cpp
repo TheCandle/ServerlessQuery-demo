@@ -861,7 +861,7 @@ static void UpdateGraphInMemory(FmgrInfo *procinfo, Oid collation, HnswElement e
 /*
  * Insert tuple in memory
  */
-static void InsertTupleInMemory(HnswBuildState *buildstate, HnswElement element)
+static void InsertTupleInMemory(HnswBuildState *buildstate, HnswElement element, Vector *transformedVec)
 {
     FmgrInfo *procinfo = buildstate->procinfo;
     Oid collation = buildstate->collation;
@@ -872,9 +872,9 @@ static void InsertTupleInMemory(HnswBuildState *buildstate, HnswElement element)
     int efConstruction = buildstate->efConstruction;
     int m = buildstate->m;
     char *base = buildstate->hnswarea;
-    int funcType = -1;
     if (buildstate->enableRabitQ) {
-        funcType = GetFunctionType(procinfo, buildstate->normprocinfo);
+        int funcType = GetFunctionType(procinfo, buildstate->normprocinfo);
+        HnswComputeVectorRBQCode(element, transformedVec, buildstate->centroid, funcType, base);
     }
 
     /* Wait if another process needs exclusive lock on entry lock */
@@ -900,8 +900,7 @@ static void InsertTupleInMemory(HnswBuildState *buildstate, HnswElement element)
 
     /* Find neighbors for element */
     HnswFindElementNeighbors(base, element, entryPoint, NULL, procinfo, collation, m, efConstruction, false,
-                             buildstate->enablePQ, buildstate->params, buildstate->enableRabitQ, funcType,
-                             buildstate->centroid, NULL);
+                             buildstate->enablePQ, buildstate->params, buildstate->enableRabitQ, NULL);
 
     /* Update graph in memory */
     UpdateGraphInMemory(procinfo, collation, element, m, efConstruction, entryPoint, buildstate);
@@ -924,6 +923,7 @@ static bool InsertTuple(Relation index, Datum *values, const bool *isnull, ItemP
     Pointer valuePtr;
     Pointer codePtr = NULL;
     Pointer rbqPtr = NULL;
+    Vector *transValue = NULL;
     LWLock *flushLock = &graph->flushLock;
     char *base = buildstate->hnswarea;
 
@@ -985,8 +985,9 @@ static bool InsertTuple(Relation index, Datum *values, const bool *isnull, ItemP
     }
 
     if (buildstate->enableRabitQ) {
+        Datum vecVal = value;
         if (IS_HALFVEC(buildstate->procinfo->fn_oid)) {
-            value = (Datum)Halfvec2Vector(value);
+            vecVal = (Datum)Halfvec2Vector(value);
         }
         RabitQConfig *rbqConfig = buildstate->rbqConfig;
         if (rbqConfig->reType == SQ8) {
@@ -994,24 +995,23 @@ static bool InsertTuple(Relation index, Datum *values, const bool *isnull, ItemP
             rbqPtr = (Pointer)HnswAlloc(allocator, rbqCodeSize(buildstate->dimensions, true));
             ScalarQuantizer *sq = rbqConfig->sq;
             int dim = sq->dim;
-            VectorEncodeSQ(dim, sq->trained, sq->trained + dim, ((Vector *)DatumGetPointer(value))->x,
+            VectorEncodeSQ(dim, sq->trained, sq->trained + dim, ((Vector *)DatumGetPointer(vecVal))->x,
                                 getRefineCode(rbqPtr, rbqConfig->reOffset));
         } else {
             rbqPtr = (Pointer)HnswAlloc(allocator, rbqCodeSize(buildstate->dimensions, false));
         }
         /* Transform vector in rabitq */
         VectorTransform* vtrans = rbqConfig->vtrans;
-        Vector *transValue = InitVector(buildstate->dimensions);
+        transValue = InitVector(buildstate->dimensions);
         if (vtrans->type == RANDOM_ORTHOGONAL) {
-            RomTransform(vtrans, ((Vector *)DatumGetPointer(value))->x, transValue->x);
+            RomTransform(vtrans, ((Vector *)DatumGetPointer(vecVal))->x, transValue->x);
         } else {
-            FhtTransform(vtrans, ((Vector *)DatumGetPointer(value))->x, transValue->x);
+            FhtTransform(vtrans, ((Vector *)DatumGetPointer(vecVal))->x, transValue->x);
         }
 
         if (IS_HALFVEC(buildstate->procinfo->fn_oid)) {
-            pfree((Vector *)value);
+            pfree((Vector *)vecVal);
         }
-        value = (Datum)transValue;
     }
 
     /* Get datum size */
@@ -1043,10 +1043,10 @@ static bool InsertTuple(Relation index, Datum *values, const bool *isnull, ItemP
     LWLockInitialize(&element->lock, hnsw_lock_tranche_id);
 
     /* Insert tuple */
-    InsertTupleInMemory(buildstate, element);
+    InsertTupleInMemory(buildstate, element, transValue);
 
     if (buildstate->enableRabitQ) {
-        pfree((Vector *)value);
+        pfree(transValue);
     }
 
     /* Release flush lock */

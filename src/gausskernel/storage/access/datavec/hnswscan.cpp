@@ -212,10 +212,10 @@ void check_length(HnswScanOpaque so, IndexScanDesc scan)
 bool isMulOverflowInt(int64 a, int64 b)
 {
     if (a == 0 || b == 0) {
-        return true;
+        return false;
     }
     if (a > INT_MAX || a < INT_MIN || b > INT_MAX || b < INT_MIN) {
-        return false;
+        return true;
     }
     return (a > INT_MAX / b);
 }
@@ -254,6 +254,7 @@ bool hnswgettuple_internal(IndexScanDesc scan, ScanDirection dir)
         value = GetScanValue(scan);
 
         if (so->enableRabitQ) {
+            Datum vecVal = value;
             if (t_thrd.proc->workingVersionNum < RABITQ_VERSION_NUM) {
                 ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                 errmsg("Before RABITQ_VERSION_NUM VERSION NUM %u, we do not support rabitq.", RABITQ_VERSION_NUM)));
@@ -262,14 +263,14 @@ bool hnswgettuple_internal(IndexScanDesc scan, ScanDirection dir)
                 ereport(ERROR, (errmsg("HNSW_RABITQ dose not support mmap.")));
             }
             if (IS_HALFVEC(so->procinfo->fn_oid)) {
-                value = (Datum)Halfvec2Vector(value);
+                vecVal = (Datum)Halfvec2Vector(value);
             }
             RabitqQueryParams *rbqParams = so->rbqParams;
             rbqParams->heap = scan->heapRelation;
             rbqParams->normprocinfo = so->normprocinfo;
             rbqParams->collation = so->collation;
             if (rbqParams->rbqConfig->reType != NotRefine) {
-                rbqParams->originQueryVec = value;
+                rbqParams->originQueryVec = vecVal;
                 if (scan->limitk == -1) {
                     rbqParams->rbqConfig->kreorder = 0;
                 } else {
@@ -284,11 +285,10 @@ bool hnswgettuple_internal(IndexScanDesc scan, ScanDirection dir)
             VectorTransform *vtrans = rbqParams->rbqConfig->vtrans;
             Vector *transValue = InitVector(rbqParams->dim);
             if (vtrans->type == RANDOM_ORTHOGONAL) {
-                RomTransform(vtrans, ((Vector *)DatumGetPointer(value))->x, transValue->x);
+                RomTransform(vtrans, ((Vector *)DatumGetPointer(vecVal))->x, transValue->x);
             } else {
-                FhtTransform(vtrans, ((Vector *)DatumGetPointer(value))->x, transValue->x);
+                FhtTransform(vtrans, ((Vector *)DatumGetPointer(vecVal))->x, transValue->x);
             }
-            value = (Datum)transValue;
 
             int qb = rbqParams->rbqConfig->rbqQueryBits;
             /* Encode query and compute factor */
