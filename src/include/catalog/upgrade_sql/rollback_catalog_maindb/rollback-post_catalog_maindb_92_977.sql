@@ -8,6 +8,8 @@ DROP VIEW IF EXISTS pg_catalog.pg_stat_sys_tables CASCADE;
 DROP VIEW IF EXISTS pg_catalog.pg_stat_user_tables CASCADE;
 DROP VIEW IF EXISTS pg_catalog.pg_stat_all_tables CASCADE;
 
+SET skip_new_column_for_ruledef = true;
+
 CREATE OR REPLACE VIEW pg_catalog.pg_stat_all_tables AS
     SELECT
             C.oid AS relid,
