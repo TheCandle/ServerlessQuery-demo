@@ -772,9 +772,9 @@ static bool dw_batch_file_recycle(dw_batch_file_context *cxt, uint16 pages_to_wr
     volatile uint16 org_start = file_head->start;
     volatile uint16 org_dwn = file_head->head.dwn;
     uint16 last_flush_page;
-    uint16 dw_batch_page_num;
+    uint32 dw_batch_page_num;
 
-    dw_batch_page_num = (uint16)(cxt->file_size / BLCKSZ);
+    dw_batch_page_num = (uint32)(cxt->file_size / BLCKSZ);
     file_full = (file_head->start + cxt->flush_page + pages_to_write >= dw_batch_page_num);
 
     Assert(!(file_full && trunc_file));
