@@ -33,6 +33,7 @@
 #include "access/datavec/vecindex.h"
 #include "access/datavec/utils.h"
 #include "access/datavec/rabitq.h"
+#include "access/datavec/hnswlsg.h"
 
 #define HNSW_MAX_DIM 2000
 #define HNSW_MAX_NNZ 1000
@@ -51,6 +52,7 @@
 #define HNSW_METAPAGE_BLKNO 0
 #define HNSW_HEAD_BLKNO 1                            /* first element page */
 #define HNSW_CHUNK_START_BLKNO 1                   /* pqtable or rabit matrix start page */
+#define HNSW_LSG_SAMPLE_START_BLKNO 1                /* lsgSample */
 
 /* Append page slot info */
 #define HNSW_DEFAULT_NPAGES_PER_SLOT 50
@@ -319,6 +321,9 @@ typedef struct HnswOptions {
     int m;              /* number of connections */
     int efConstruction; /* size of dynamic candidate list */
     bool enablePQ;
+    bool enableLsg;
+    double lsgAlpha;
+    int lsgDegree;
     bool useMmap;
     int pqM;            /* number of subquantizer */
     int pqKsub;         /* number of centroids for each subquantizer */
@@ -359,6 +364,8 @@ typedef struct HnswShared {
     Oid indexrelid;
     char *pqTable;
     float *pqDistanceTable;
+
+    LsgCalculator* lsgCalc;
 
     float *centroid;
     RabitQConfig *rbqConfig;
@@ -456,6 +463,14 @@ typedef struct HnswBuildState {
     double rstate;
     int rowstoskip;
 
+    /* lsg info */
+    bool enableLsg;
+    float* lsgSample;
+    int lsgSampleSize;
+    int lsgIndexCounter;
+    int lsgDim;
+    LsgCalculator* LocScalingParam;
+
     /* storage page info */
     bool isUStore; /* false means astore */
 } HnswBuildState;
@@ -492,6 +507,12 @@ typedef struct HnswMetaPageData {
     RefineType reType;
     uint16 otherNblk;
     uint32 otherSize; /* centroid + (min + diff) if reType == SQ8 */
+
+    /* LSG info */
+    bool enableLsg;
+    uint32 lsgSampleSize;
+    uint32 lsgCodeBookSize;
+    uint16 lsgSampleNblk;
 } HnswMetaPageData;
 
 typedef HnswMetaPageData *HnswMetaPage;
@@ -655,6 +676,9 @@ bool HnswGetEnablePQ(Relation index);
 bool HnswGetEnableMMap(Relation index);
 int HnswGetPqM(Relation index);
 int HnswGetPqKsub(Relation index);
+bool HnswGetEnableLsg(Relation index);
+int HnswGetLsgDegree(Relation index);
+double HnswGetLsgAlpha(Relation index);
 bool HnswGetEnableRabitQ(Relation index);
 bool HnswGetUseFHT(Relation index);
 RefineType HnswGetRefineType(Relation index);
@@ -708,7 +732,9 @@ void HnswUpdateAppendMetaPage(Relation index, int updateEntry, HnswElement entry
 void FlushPQInfo(HnswBuildState *buildstate);
 void HnswGetPQInfoFromMetaPage(Relation index, uint16 *pqTableNblk, uint32 *pqTableSize,
                                uint16 *pqDisTableNblk, uint32 *pqDisTableSize);
-
+void FlushLsgSamples(HnswBuildState *buildstate);
+void HnswGetLsgInfoFromMetaPage(Relation index, uint32* lsgCodeBookSize, uint16* nBlks, uint32* lsgDim,
+                                uint32* lsgSampleSize, bool* enableLsg);
 int ComputePQTable(VectorArray samples, PQParams *params);
 int ComputeVectorPQCode(float *vector, const PQParams *params, uint8 *pqCode, size_t pqCode_size);
 int GetPQDistanceTableSdc(const PQParams *params, float *pqDistanceTable, size_t pqDistanceTable_size);
@@ -718,6 +744,7 @@ int GetPQDistance(const uint8 *basecode, const uint8 *querycode, const PQParams 
                   const float *pqDistanceTable, float *pqDistance, size_t basecode_size,
                   size_t querycode_size, size_t pqDistanceTable_size, size_t pqDistance_size);
 void InitPQParamsOnDisk(PQParams *params, Relation index, FmgrInfo *procinfo, int dim, bool *enablePQ, bool trymmap);
+void InitLsgSamplesOnDisk(Relation index, FmgrInfo *procinfo, LsgCalculator** LocScalingParam, bool *enableLsg);
 void HnswGetRbqInfoFromMetaPage(Relation index, bool *enableRabitQ, bool *useFHT, uint16 *reOffset,
                                 RefineType *reType, uint16 *matrixNblk, uint32 *matrixSize,
                                 uint16 *otherNblk, uint32 *otherSize, int *rbqDelayState, int64 *rbqInsertRows);
