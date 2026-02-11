@@ -711,7 +711,7 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
 
     InitPQParamsOnDisk(&params, index, procinfo, dim, &enablePQ, false);
     InitLsgSamplesOnDisk(index, procinfo, &LocScalingParam, &enableLsg);
-    if (LocScalingParam != NULL) {
+    if (LocScalingParam != NULL && !IS_SPARSEVEC(procinfo->fn_oid)) {
         Vector* currentVec = (Vector*)HnswGetValue(base, element);
         if (enableLsg) {
             currentVec->isoValue = CalcIsoVal((float*)currentVec->x, LocScalingParam);
