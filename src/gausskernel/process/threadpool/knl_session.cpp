@@ -1488,6 +1488,7 @@ static void knl_u_datavec_init(knl_u_datavec_context* datavec_cxt)
     BitvecInit();
     datavec_cxt->hnsw_ef_search = 0;
     datavec_cxt->hnsw_earlystop_threshold = 0;
+    datavec_cxt->rbq_query_bits = 0;
     datavec_cxt->ivfflat_probes = 0;
     datavec_cxt->ivfpq_kreorder = 0;
 }

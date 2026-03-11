@@ -7,12 +7,22 @@
 
 #define GENERIC_DEFAULT_ENABLE_PQ false
 #define GENERIC_DEFAULT_USE_MMAP false
+#define GENERIC_DEFAULT_ENABLE_RABITQ false
+#define GENERIC_DEFAULT_USE_FHT false
 #define GENERIC_DEFAULT_PQ_M 8
 #define GENERIC_MIN_PQ_M 1
 #define GENERIC_MAX_PQ_M HNSW_MAX_DIM
 #define GENERIC_DEFAULT_PQ_KSUB 256
 #define GENERIC_MIN_PQ_KSUB 1
 #define GENERIC_MAX_PQ_KSUB 256
+#define DIS_L2 1
+#define DIS_IP 2
+#define DIS_COSINE 3
+#define L2_FUNC_OID 8431
+#define IP_FUNC_OID 8434
+#define HALF_L2_FUNC_OID 8644
+#define HALF_IP_FUNC_OID 8493
+#define CHUNK_STORAGE_SIZE (uint16)(6 * 1024)
 
 typedef struct VectorArrayData {
     int length;
@@ -69,7 +79,8 @@ void HalfvecSumCenter(Pointer v, float *x);
 void BitSumCenter(Pointer v, float *x);
 VectorArray VectorArrayInit(int maxlen, int dimensions, Size itemsize);
 void VectorArrayFree(VectorArray arr);
-
+HeapTuple GetTupleFromHeap(Relation relation, ItemPointer tid);
+int GetFunctionType(FmgrInfo *procinfo, FmgrInfo *normprocinfo);
 int PQInit();
 void PQUinit();
 
