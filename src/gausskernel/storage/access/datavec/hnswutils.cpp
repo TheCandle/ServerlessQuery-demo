@@ -1,16 +1,31 @@
 /*
- * Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ * This file contains code from different sources, governed by different open source licenses.
  *
- * openGauss is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * 1. Code originating from the PostgreSQL project:
+ *    - Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ *    - This code is licensed under the PostgreSQL License.
+ *    - Permission is granted to use, copy, modify, and distribute this software in source and binary forms,
+ *      provided that the above copyright notice, this condition list, and the following disclaimer
+ *      are retained in source distributions, and reproduced in documentation/material provided with
+ *      binary distributions.
  *
- *          http://license.coscl.org.cn/MulanPSL2
+ * 2. Modifications and new code by Huawei Technologies Co., Ltd.:
+ *    - Portions Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ *    - This code is licensed under the Mulan Permissive Software License, Version 2 (Mulan PSL v2).
+ *    - Full license text available at: http://license.coscl.org.cn/MulanPSL2
  *
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PSL v2 for more details.
+ * 3. General Disclaimer (as required by the PostgreSQL License):
+ *    - THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+ *      OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ *      AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ *      CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *      DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *      DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *      IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ *      OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * By using this file, you acknowledge that you must comply with all applicable terms of both the
+ * PostgreSQL License and the Mulan PSL v2 for the respective code portions you utilize.
  * -------------------------------------------------------------------------
  *
  * hnswutils.cpp
@@ -24,8 +39,10 @@
 
 #include <cmath>
 
+#include "access/tableam.h"
 #include "access/generic_xlog.h"
 #include "catalog/pg_type.h"
+#include "catalog/index.h"
 #include "fmgr.h"
 #include "access/datavec/hnsw.h"
 #include "lib/pairingheap.h"
@@ -201,6 +218,34 @@ int HnswGetPqKsub(Relation index)
 }
 
 /*
+ * Get whether to enable RabitQ
+ */
+bool HnswGetEnableRabitQ(Relation index)
+{
+    HnswOptions *opts = (HnswOptions *)index->rd_options;
+
+    if (opts) {
+        return opts->enableRabitQ;
+    }
+
+    return GENERIC_DEFAULT_ENABLE_RABITQ;
+}
+
+/*
+ * Get whether to enable FHT Matrix
+ */
+bool HnswGetUseFHT(Relation index)
+{
+    HnswOptions *opts = (HnswOptions *)index->rd_options;
+
+    if (opts) {
+        return opts->rabitqFHT;
+    }
+
+    return GENERIC_DEFAULT_USE_FHT;
+}
+
+/*
  * Get proc
  */
 FmgrInfo *HnswOptionalProcInfo(Relation index, uint16 procnum)
@@ -309,6 +354,7 @@ HnswElement HnswInitElement(char *base, ItemPointer heaptid, int m, double ml, i
     HnswInitNeighbors(base, element, m, allocator);
 
     HnswPtrStore(base, element->value, (Pointer)NULL);
+    HnswPtrStore(base, element->rbqcodes, (Pointer)NULL);
     element->fromMmap = false;
 
     return element;
@@ -492,7 +538,7 @@ void HnswUpdateAppendMetaPage(Relation index, int updateEntry, HnswElement entry
     UnlockReleaseBuffer(buf);
 }
 
-void FlushPQInfoInternal(Relation index, char* table, BlockNumber startBlkno, uint16 nblks, uint32 totalSize)
+void FlushChunkInfoInternal(Relation index, char* table, BlockNumber startBlkno, uint16 nblks, uint32 totalSize)
 {
     Buffer buf;
     Page page;
@@ -500,12 +546,12 @@ void FlushPQInfoInternal(Relation index, char* table, BlockNumber startBlkno, ui
     uint32 curFlushSize;
     for (uint16 i = 0; i < nblks; i++) {
         curFlushSize = (i == nblks - 1) ?
-                        (totalSize - i * HNSW_PQTABLE_STORAGE_SIZE) : HNSW_PQTABLE_STORAGE_SIZE;
+                        (totalSize - i * CHUNK_STORAGE_SIZE) : CHUNK_STORAGE_SIZE;
         buf = ReadBufferExtended(index, MAIN_FORKNUM, startBlkno + i, RBM_NORMAL, NULL);
         LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
         page = BufferGetPage(buf);
         errno_t err = memcpy_s(PageGetContents(page), curFlushSize,
-                        table + i * HNSW_PQTABLE_STORAGE_SIZE, curFlushSize);
+                        table + i * CHUNK_STORAGE_SIZE, curFlushSize);
         securec_check(err, "\0", "\0");
         p = (PageHeader)page;
         p->pd_lower += curFlushSize;
@@ -530,11 +576,11 @@ void FlushPQInfo(HnswBuildState * buildstate)
     HnswGetPQInfoFromMetaPage(index, &pqTableNblk, &pqTableSize, &pqDisTableNblk, &pqDisTableSize);
 
     /* Flush pq table */
-    FlushPQInfoInternal(index, pqTable, HNSW_PQTABLE_START_BLKNO, pqTableNblk, pqTableSize);
+    FlushChunkInfoInternal(index, pqTable, HNSW_CHUNK_START_BLKNO, pqTableNblk, pqTableSize);
     if (buildstate->pqMode == HNSW_PQMODE_SDC) {
         /* Flush pq distance table */
-        FlushPQInfoInternal(index, (char*)pqDistanceTable,
-                            HNSW_PQTABLE_START_BLKNO + pqTableNblk, pqDisTableNblk, pqDisTableSize);
+        FlushChunkInfoInternal(index, (char*)pqDistanceTable,
+                            HNSW_CHUNK_START_BLKNO + pqTableNblk, pqDisTableNblk, pqDisTableSize);
     }
 }
 
@@ -551,11 +597,11 @@ char* LoadPQtable(Relation index)
     pqTable = (char*)palloc0(pqTableSize);
 
     for (uint16 i = 0; i < nblks; i++) {
-        curFlushSize = (i == nblks - 1) ? (pqTableSize - i * HNSW_PQTABLE_STORAGE_SIZE) : HNSW_PQTABLE_STORAGE_SIZE;
-        buf = ReadBuffer(index, HNSW_PQTABLE_START_BLKNO + i);
+        curFlushSize = (i == nblks - 1) ? (pqTableSize - i * CHUNK_STORAGE_SIZE) : CHUNK_STORAGE_SIZE;
+        buf = ReadBuffer(index, HNSW_CHUNK_START_BLKNO + i);
         LockBuffer(buf, BUFFER_LOCK_SHARE);
         page = BufferGetPage(buf);
-        errno_t err = memcpy_s(pqTable + i * HNSW_PQTABLE_STORAGE_SIZE, curFlushSize,
+        errno_t err = memcpy_s(pqTable + i * CHUNK_STORAGE_SIZE, curFlushSize,
                                PageGetContents(page), curFlushSize);
         securec_check(err, "\0", "\0");
         UnlockReleaseBuffer(buf);
@@ -576,13 +622,13 @@ float* LoadPQDisTable(Relation index)
     HnswGetPQInfoFromMetaPage(index, &pqTableNblk, NULL, &nblks, &pqDisTableSize);
     disTable = (float*)palloc0(pqDisTableSize);
 
-    BlockNumber startBlkno = HNSW_PQTABLE_START_BLKNO + pqTableNblk;
+    BlockNumber startBlkno = HNSW_CHUNK_START_BLKNO + pqTableNblk;
     for (uint16 i = 0; i < nblks; i++) {
-        curFlushSize = (i == nblks - 1) ? (pqDisTableSize - i * HNSW_PQTABLE_STORAGE_SIZE) : HNSW_PQTABLE_STORAGE_SIZE;
+        curFlushSize = (i == nblks - 1) ? (pqDisTableSize - i * CHUNK_STORAGE_SIZE) : CHUNK_STORAGE_SIZE;
         buf = ReadBuffer(index, startBlkno + i);
         LockBuffer(buf, BUFFER_LOCK_SHARE);
         page = BufferGetPage(buf);
-        errno_t err = memcpy_s((char*)disTable + i * HNSW_PQTABLE_STORAGE_SIZE, curFlushSize,
+        errno_t err = memcpy_s((char*)disTable + i * CHUNK_STORAGE_SIZE, curFlushSize,
                                 PageGetContents(page), curFlushSize);
         securec_check(err, "\0", "\0");
         UnlockReleaseBuffer(buf);
@@ -599,9 +645,8 @@ LoadPQcode(HnswElementTuple tuple)
 /*
  * Set element tuple, except for neighbor info
  */
-void HnswSetElementTuple(char *base, HnswElementTuple etup, HnswElement element)
+void HnswSetElementTuple(char *base, HnswElementTuple etup, HnswElement element, Size rbqEtupSize)
 {
-    Pointer valuePtr = (Pointer)HnswPtrAccess(base, element->value);
     errno_t rc = EOK;
 
     etup->type = HNSW_ELEMENT_TUPLE_TYPE;
@@ -613,7 +658,13 @@ void HnswSetElementTuple(char *base, HnswElementTuple etup, HnswElement element)
         else
             ItemPointerSetInvalid(&etup->heaptids[i]);
     }
-    rc = memcpy_s(&etup->data, VARSIZE_ANY(valuePtr), valuePtr, VARSIZE_ANY(valuePtr));
+    if ((Pointer)HnswPtrAccess(base, element->rbqcodes) != NULL) {
+        Pointer rbqPtr = (Pointer)HnswPtrAccess(base, element->rbqcodes);
+        rc = memcpy_s(&etup->data, rbqEtupSize, rbqPtr, rbqEtupSize);
+    } else {
+        Pointer valuePtr = (Pointer)HnswPtrAccess(base, element->value);
+        rc = memcpy_s(&etup->data, VARSIZE_ANY(valuePtr), valuePtr, VARSIZE_ANY(valuePtr));
+    }
     securec_check(rc, "\0", "\0");
 }
 
@@ -713,7 +764,7 @@ void HnswLoadNeighbors(HnswElement element, Relation index, int m)
 /*
  * Load an element from a tuple
  */
-void HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool loadHeaptids, bool loadVec)
+void HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool loadHeaptids, bool loadVec, Datum eRbqDiskVec, bool *store)
 {
     element->level = etup->level;
     element->deleted = etup->deleted;
@@ -733,17 +784,66 @@ void HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool l
 
     if (loadVec) {
         char *base = NULL;
-        Datum value = datumCopy(PointerGetDatum(&etup->data), false, -1);
+        Datum value;
+        if (eRbqDiskVec != NULL) {
+            value = eRbqDiskVec;
+            *store = true;
+        } else {
+            value = datumCopy(PointerGetDatum(&etup->data), false, -1);
+        }
 
         HnswPtrStore(base, element->value, DatumGetPointer(value));
     }
+}
+
+Datum HnswGetVectorFromHeap(ItemPointer tid, IndexInfo *indexInfo, RabitqInsertOnDiskParams *rbqDiskParams)
+{
+    Relation heap = rbqDiskParams->heap;
+    VectorTransform* vtrans = rbqDiskParams->vtrans;
+
+    if (indexInfo->ii_NumIndexAttrs != 1) {
+        ereport(ERROR, (errmsg("Supports vector indexing exclusively for a single column.")));
+    }
+    HeapTuple tuple = GetTupleFromHeap(heap, tid);
+
+    TupleDesc relTupleDesc = heap->rd_att;
+    Datum *val = (Datum *)palloc(sizeof(Datum) * (relTupleDesc->natts + 1));
+    bool *null = (bool *)palloc(sizeof(bool) * (relTupleDesc->natts + 1));
+
+    tableam_tops_deform_tuple(tuple, relTupleDesc, val, null);
+    Vector *originVec;
+
+    for (int i = 0; i < indexInfo->ii_NumIndexAttrs; i++) {
+        int keycol = indexInfo->ii_KeyAttrNumbers[i];
+        if (keycol != 0) {
+            originVec = DatumGetVector(val[keycol - 1]);
+        } else {
+            ereport(ERROR, (errmsg("Failed to get origin vector from heap.")));
+        }
+    }
+
+    int dim = originVec->dim;
+    Vector *resVec = InitVector(dim);
+
+    if (vtrans->type == FAST_HTRANSFORM) {
+        FhtTransform(vtrans, originVec->x, resVec->x);
+    } else {
+        Size vecsize = dim * sizeof(float);
+        errno_t err = memcpy_s(resVec->x, vecsize, originVec->x, vecsize);
+        securec_check(err, "\0", "\0");
+    }
+
+    pfree(val);
+    pfree(null);
+    return (Datum)resVec;
 }
 
 /*
  * Load an element and optionally get its distance from q
  */
 bool HnswLoadElement(HnswElement element, float *distance, Datum *q, Relation index, FmgrInfo *procinfo, Oid collation,
-                     bool loadVec, float *maxDistance, IndexScanDesc scan, bool enablePQ, PQSearchInfo *pqinfo)
+                     bool loadVec, float *maxDistance, bool enableRabitQ, RabitqQueryParams *rbqQueryParams,
+                     RabitqInsertOnDiskParams *rbqDiskParams, IndexScanDesc scan, bool enablePQ, PQSearchInfo *pqinfo)
 {
     Buffer buf;
     Page page;
@@ -752,6 +852,8 @@ bool HnswLoadElement(HnswElement element, float *distance, Datum *q, Relation in
     bool isVisible = true;
     uint8 *ePQCode;
     PQParams *params;
+    Datum eRbqDiskVec = NULL;
+    bool store = false;
 
     /* Read vector */
     buf = ReadBuffer(index, element->blkno);
@@ -779,6 +881,42 @@ bool HnswLoadElement(HnswElement element, float *distance, Datum *q, Relation in
             } else {
                 GetPQDistance(ePQCode, pqinfo->qPQCode, params, pqinfo->pqDistanceTable, distance);
             }
+        } else if (enableRabitQ) {
+            /* 
+             * Rbq insert in memeory, rbqDiskParams == NULL && rbqQueryParams == NULL
+             * Rbq insert on disk, rbqDiskParams != NULL
+             * Rbq search, rbqQueryParams != NULL
+             */
+            if (DatumGetPointer(*q) == NULL) {
+                *distance = 0;
+            } else if (rbqDiskParams != NULL) {
+                VectorTransform *vtrans = rbqDiskParams->vtrans;
+                eRbqDiskVec = HnswGetVectorFromHeap(&etup->heaptids[0], BuildIndexInfo(index), rbqDiskParams);
+                if (vtrans->type == FAST_HTRANSFORM) {
+                    /* 
+                     * origin vec A B, after FHT+rescale+sign+walk transformed vec A1 B1
+                     * Dis(A,B) != Dis(A1,B1)
+                     * Here, *distance = Dis(A1,B1)
+                     */
+                    *distance = (float)DatumGetFloat8(FunctionCall2Coll(procinfo, collation, *q, eRbqDiskVec));
+                } else {
+                    /* 
+                     * origin vec A B, after ROM transformed vec A1 B1
+                     * Dis(A,B) = Dis(A1,B1)
+                     * Vector transformation takes time. To avoid it, we use *distance = Dis(A,B)
+                     */
+                    *distance = (float)DatumGetFloat8(FunctionCall2Coll(procinfo, collation,
+                        rbqDiskParams->originInsertVec, eRbqDiskVec));
+                }
+            } else if (rbqQueryParams != NULL) {
+                RabitqVector *rbqVec = (RabitqVector *)PointerGetDatum(&etup->data);
+                RabitQConfig *rbqConfig = rbqQueryParams->rbqConfig;
+                QueryRabitqVector* qrbqVec = rbqQueryParams->qrbqVec;
+                *distance = ComputeRbqDistance(rbqQueryParams->dim, rbqConfig->rbqQueryBits, rbqVec, qrbqVec, rbqQueryParams->funcType);
+            } else {
+                *distance = (float)DatumGetFloat8(FunctionCall2Coll(
+                            procinfo, collation, *q, PointerGetDatum(&etup->data)));
+            }
         } else {
             if (DatumGetPointer(*q) == NULL) {
                 *distance = 0;
@@ -791,13 +929,13 @@ bool HnswLoadElement(HnswElement element, float *distance, Datum *q, Relation in
 
     /* Load element */
     if (distance == NULL || maxDistance == NULL || *distance < *maxDistance) {
-        HnswLoadElementFromTuple(element, etup, true, loadVec);
+        HnswLoadElementFromTuple(element, etup, true, loadVec, eRbqDiskVec, &store);
         if (enablePQ) {
             params = &pqinfo->params;
             Vector *vd1 = &etup->data;
             Vector *vd2 = (Vector *)DatumGetPointer(*q);
             float exactDis;
-            if (pqinfo->params.funcType == HNSW_PQ_DIS_IP) {
+            if (pqinfo->params.funcType == DIS_IP) {
                 exactDis = -VectorInnerProduct(params->dim, vd1->x, vd2->x);
             } else {
                 exactDis = VectorL2SquaredDistance(params->dim, vd1->x, vd2->x);
@@ -807,6 +945,9 @@ bool HnswLoadElement(HnswElement element, float *distance, Datum *q, Relation in
     }
 
     UnlockReleaseBuffer(buf);
+    if (eRbqDiskVec != NULL && !store) {
+        pfree((Vector *)eRbqDiskVec);
+    }
     return isVisible;
 }
 
@@ -824,7 +965,9 @@ static float GetCandidateDistance(char *base, HnswElement element, Datum q, Fmgr
  * Create a candidate for the entry point
  */
 HnswCandidate *HnswEntryCandidate(char *base, HnswElement entryPoint, Datum q, Relation index, FmgrInfo *procinfo,
-                                  Oid collation, bool loadVec, IndexScanDesc scan, bool enablePQ, PQSearchInfo *pqinfo)
+                                  Oid collation, bool loadVec, bool enableRabitQ, RabitqQueryParams *rbqQueryParams,
+                                  RabitqInsertOnDiskParams *rbqDiskParams, IndexScanDesc scan, bool enablePQ, 
+                                  PQSearchInfo *pqinfo)
 {
     HnswCandidate *hc = (HnswCandidate *)palloc(sizeof(HnswCandidate));
 
@@ -833,7 +976,8 @@ HnswCandidate *HnswEntryCandidate(char *base, HnswElement entryPoint, Datum q, R
         hc->distance = GetCandidateDistance(base, entryPoint, q, procinfo, collation);
     } else {
         bool isVisible = HnswLoadElement(entryPoint, &hc->distance, &q, index, procinfo,
-                                         collation, loadVec, NULL, scan, enablePQ, pqinfo);
+                                         collation, loadVec, NULL, enableRabitQ, rbqQueryParams,
+                                         rbqDiskParams, scan, enablePQ, pqinfo);
         if (!isVisible) {
             elog(ERROR, "hnsw entryPoint is invisible\n");
         }
@@ -1011,7 +1155,8 @@ void HnswLoadUnvisitedFromDisk(HnswElement element, HnswElement *unvisited, int 
  * Algorithm 2 from paper
  */
 List *HnswSearchLayer(char *base, Datum q, List *ep, int ef, int lc, Relation index, FmgrInfo *procinfo,
-                      Oid collation, int m, bool inserting, HnswElement skipElement, bool tryMmap,
+                      Oid collation, int m, bool inserting, HnswElement skipElement, bool enableRabitQ,
+                      RabitqQueryParams *rbqParams, RabitqInsertOnDiskParams *rbqDiskParams, bool tryMmap,
                       IndexScanDesc scan, bool enablePQ, PQSearchInfo *pqinfo)
 {
     List *w = NIL;
@@ -1099,10 +1244,12 @@ List *HnswSearchLayer(char *base, Datum q, List *ep, int ef, int lc, Relation in
             } else {
                 if (tryMmap) {
                     MmapLoadElement(eElement, &eDistance, &q, index, procinfo, collation, inserting,
-                                    alwaysAdd ? NULL : &f->distance, NULL, enablePQ, pqinfo);
+                                    alwaysAdd ? NULL : &f->distance, enableRabitQ, rbqParams, rbqDiskParams,
+                                    NULL, enablePQ, pqinfo);
                 } else {
                     HnswLoadElement(eElement, &eDistance, &q, index, procinfo, collation, inserting,
-                                    alwaysAdd ? NULL : &f->distance, NULL, enablePQ, pqinfo);
+                                    alwaysAdd ? NULL : &f->distance, enableRabitQ, rbqParams, rbqDiskParams,
+                                    NULL, enablePQ, pqinfo);
                 }
             }
 
@@ -1370,7 +1517,8 @@ static void AddConnections(char *base, HnswElement element, List *neighbors, int
  * Update connections
  */
 void HnswUpdateConnection(char *base, HnswElement element, HnswCandidate *hc, int lm, int lc, int *updateIdx,
-                          Relation index, FmgrInfo *procinfo, Oid collation)
+                          Relation index, FmgrInfo *procinfo, Oid collation, bool enableRabitQ,
+                          RabitqInsertOnDiskParams *rbqDiskParams)
 {
     HnswElement hce = (HnswElement)HnswPtrAccess(base, hc->element);
     HnswNeighborArray *currentNeighbors = HnswGetNeighbors(base, hce, lc);
@@ -1399,7 +1547,8 @@ void HnswUpdateConnection(char *base, HnswElement element, HnswCandidate *hc, in
                 HnswElement hc3Element = (HnswElement)HnswPtrAccess(base, hc3->element);
 
                 if (HnswPtrIsNull(base, hc3Element->value))
-                    HnswLoadElement(hc3Element, &hc3->distance, &q, index, procinfo, collation, true, NULL);
+                    HnswLoadElement(hc3Element, &hc3->distance, &q, index, procinfo, collation, true,
+                                    NULL, enableRabitQ, NULL, rbqDiskParams);
                 else
                     hc3->distance = GetCandidateDistance(base, hc3Element, q, procinfo, collation);
 
@@ -1476,7 +1625,8 @@ static List *RemoveElements(char *base, List *w, HnswElement skipElement)
  */
 void HnswFindElementNeighbors(char *base, HnswElement element, HnswElement entryPoint, Relation index,
                               FmgrInfo *procinfo, Oid collation, int m, int efConstruction, bool existing,
-                              bool enablePQ, PQParams *params)
+                              bool enablePQ, PQParams *params, bool enableRabitQ, int funcType, float *centroid,
+                              RabitqInsertOnDiskParams *rbqDiskParams)
 {
     List *ep;
     List *w;
@@ -1499,13 +1649,22 @@ void HnswFindElementNeighbors(char *base, HnswElement element, HnswElement entry
     if (entryPoint == NULL)
         return;
 
+    /* compute rabitq code */
+    if (enableRabitQ) {
+        Vector *vec = (Vector *)HnswPtrAccess(base, element->value);
+        RabitqVector *rbqVec = (RabitqVector *)HnswPtrAccess(base, element->rbqcodes);
+        ComputeVectorRBQCode(vec->dim, vec->x, rbqVec, centroid, funcType);
+    }
+
     /* Get entry point and level */
-    ep = list_make1(HnswEntryCandidate(base, entryPoint, q, index, procinfo, collation, true));
+    ep = list_make1(HnswEntryCandidate(base, entryPoint, q, index, procinfo, collation, true,
+                                        enableRabitQ, NULL, rbqDiskParams));
     entryLevel = entryPoint->level;
 
     /* 1st phase: greedy search to insert level */
     for (int lc = entryLevel; lc >= level + 1; lc--) {
-        w = HnswSearchLayer(base, q, ep, 1, lc, index, procinfo, collation, m, true, skipElement);
+        w = HnswSearchLayer(base, q, ep, 1, lc, index, procinfo, collation, m, true, skipElement,
+                            enableRabitQ, NULL, rbqDiskParams);
         ep = w;
     }
 
@@ -1523,7 +1682,8 @@ void HnswFindElementNeighbors(char *base, HnswElement element, HnswElement entry
         List *neighbors;
         List *lw;
 
-        w = HnswSearchLayer(base, q, ep, efConstruction, lc, index, procinfo, collation, m, true, skipElement);
+        w = HnswSearchLayer(base, q, ep, efConstruction, lc, index, procinfo, collation, m, true, skipElement,
+                            enableRabitQ, NULL, rbqDiskParams);
 
         /* Elements being deleted or skipped can help with search */
         /* but should be removed before selecting neighbors */
@@ -1588,22 +1748,6 @@ void HnswGetPQInfoFromMetaPage(Relation index, uint16 *pqTableNblk, uint32 *pqTa
     UnlockReleaseBuffer(buf);
 }
 
-int getPQfunctionType(FmgrInfo *procinfo, FmgrInfo *normprocinfo)
-{
-    if (procinfo->fn_oid == 8431) {
-        return HNSW_PQ_DIS_L2;
-    } else if (procinfo->fn_oid == 8434) {
-        if (normprocinfo == NULL) {
-            return HNSW_PQ_DIS_IP;
-        } else {
-            return HNSW_PQ_DIS_COSINE;
-        }
-    } else {
-        ereport(ERROR, (errmsg("current data type or distance type can't support hnswpq.")));
-        return -1;
-    }
-}
-
 void InitPQParamsOnDisk(PQParams *params, Relation index, FmgrInfo *procinfo, int dim, bool *enablePQ, bool trymmap)
 {
     const HnswTypeInfo *typeInfo = HnswGetTypeInfo(index);
@@ -1616,7 +1760,7 @@ void InitPQParamsOnDisk(PQParams *params, Relation index, FmgrInfo *procinfo, in
     }
 
     if (*enablePQ) {
-        params->funcType = getPQfunctionType(procinfo, HnswOptionalProcInfo(index, HNSW_NORM_PROC));
+        params->funcType = GetFunctionType(procinfo, HnswOptionalProcInfo(index, HNSW_NORM_PROC));
         params->dim = dim;
         Size subItemsize = typeInfo->itemSize(dim / params->pqM);
         params->subItemSize = MAXALIGN(subItemsize);
@@ -1638,6 +1782,98 @@ void InitPQParamsOnDisk(PQParams *params, Relation index, FmgrInfo *procinfo, in
 
 }
 
+/*
+* Get the info related to RabitQ in metapage
+*/
+void HnswGetRbqInfoFromMetaPage(Relation index, bool *enableRabitQ, bool *useFHT, uint16 *matrixNblk,
+                                uint32 *matrixSize, float *centroid, int dim)
+{
+    Buffer buf;
+    Page page;
+
+    buf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
+    LockBuffer(buf, BUFFER_LOCK_SHARE);
+    page = BufferGetPage(buf);
+
+    HnswMetaPage metap = HnswPageGetMeta(page);
+    if (unlikely(metap->magicNumber != HNSW_MAGIC_NUMBER)) {
+        UnlockReleaseBuffer(buf);
+        elog(ERROR, "hnsw index is not valid");
+    }
+
+    if (enableRabitQ != NULL) {
+        *enableRabitQ = metap->enableRabitQ;
+        if (*enableRabitQ && centroid != NULL) {
+            size_t centroidSize = dim * sizeof(float);
+            errno_t err = memcpy_s((char*)centroid, centroidSize, metap->centroid, centroidSize);
+            securec_check(err, "\0", "\0");
+        }
+    }
+    if (useFHT != NULL) {
+        *useFHT = metap->useFHT;
+    }
+    if (matrixNblk != NULL) {
+        *matrixNblk = metap->matrixNblk;
+    }
+    if (matrixSize != NULL) {
+        *matrixSize = metap->matrixSize;
+    }
+
+    UnlockReleaseBuffer(buf);
+}
+
+void* LoadRbqMatrix(Relation index, uint16 matrixNblk, uint32 matrixSize)
+{
+    Buffer buf;
+    Page page;
+    uint32 curFlushSize;
+    void *matrix = (void *)palloc0(matrixSize);
+
+    for (uint16 i = 0; i < matrixNblk; i++) {
+        curFlushSize = (i == matrixNblk - 1) ? (matrixSize - i * CHUNK_STORAGE_SIZE) : CHUNK_STORAGE_SIZE;
+        buf = ReadBuffer(index, HNSW_CHUNK_START_BLKNO + i);
+        LockBuffer(buf, BUFFER_LOCK_SHARE);
+        page = BufferGetPage(buf);
+        errno_t err = memcpy_s((char *)matrix + i * CHUNK_STORAGE_SIZE, curFlushSize,
+                               PageGetContents(page), curFlushSize);
+        securec_check(err, "\0", "\0");
+        UnlockReleaseBuffer(buf);
+    }
+    return matrix;
+}
+
+RabitQConfig *InitRbqConfigOnDisk(Relation index, bool *enableRabitQ, float *centroid, int dim)
+{
+    uint16 matrixNblk;
+    uint32 matrixSize;
+    bool useFHT;
+
+    HnswGetRbqInfoFromMetaPage(index, enableRabitQ, &useFHT, &matrixNblk, &matrixSize, centroid, dim);
+
+    if (!enableRabitQ) {
+        return NULL;
+    }
+    if (index->rbqMatrix == NULL) {
+        MemoryContext oldcxt = MemoryContextSwitchTo(index->rd_indexcxt);
+        index->rbqMatrix = LoadRbqMatrix(index, matrixNblk, matrixSize);
+        (void)MemoryContextSwitchTo(oldcxt);
+    }
+    RabitQConfig *rbqConfig = (RabitQConfig *)palloc(sizeof(RabitQConfig));
+    rbqConfig->FHT = useFHT;
+    VectorTransform *vtrans = (VectorTransform *)palloc(sizeof(VectorTransform));
+    rbqConfig->vtrans = vtrans;
+    vtrans->dim = dim;
+    if (useFHT) {
+        vtrans->type = FAST_HTRANSFORM;
+        FhtInit(vtrans);
+        vtrans->matfht = (uint8 *)index->rbqMatrix;
+    } else {
+        vtrans->type = RANDOM_ORTHOGONAL;
+        vtrans->matrix = (float *)index->rbqMatrix;
+    }
+    return rbqConfig;
+}
+
 static void SparsevecCheckValue(Pointer v)
 {
     SparseVector *vec = (SparseVector *)v;
@@ -1656,7 +1892,7 @@ const HnswTypeInfo *HnswGetTypeInfo(Relation index)
 
     if (procinfo == NULL) {
         static const HnswTypeInfo typeInfo = {
-            .maxDimensions = HNSW_MAX_DIM, .supportPQ = true,
+            .maxDimensions = HNSW_MAX_DIM, .supportPQ = true, .supportRabitQ = true,
             .itemSize = VectorItemSize, .normalize = l2_normalize, .checkValue = NULL};
         return (&typeInfo);
     } else {
@@ -1668,7 +1904,7 @@ PGDLLEXPORT PG_FUNCTION_INFO_V1(hnsw_halfvec_support);
 Datum hnsw_halfvec_support(PG_FUNCTION_ARGS)
 {
     static const HnswTypeInfo typeInfo = {
-        .maxDimensions = HNSW_MAX_DIM * 2, .supportPQ = false,
+        .maxDimensions = HNSW_MAX_DIM * 2, .supportPQ = false, .supportRabitQ = false,
         .itemSize = HalfvecItemSize, .normalize = halfvec_l2_normalize, .checkValue = NULL};
 
     PG_RETURN_POINTER(&typeInfo);
@@ -1678,7 +1914,8 @@ PGDLLEXPORT PG_FUNCTION_INFO_V1(hnsw_bit_support);
 Datum hnsw_bit_support(PG_FUNCTION_ARGS)
 {
     static const HnswTypeInfo typeInfo = {.maxDimensions = HNSW_MAX_DIM * 32, .supportPQ = false,
-                                          .itemSize = BitItemSize, .normalize = NULL, .checkValue = NULL};
+                                          .supportRabitQ = false, .itemSize = BitItemSize,
+                                          .normalize = NULL, .checkValue = NULL};
 
     PG_RETURN_POINTER(&typeInfo);
 };
@@ -1687,7 +1924,7 @@ PGDLLEXPORT PG_FUNCTION_INFO_V1(hnsw_sparsevec_support);
 Datum hnsw_sparsevec_support(PG_FUNCTION_ARGS)
 {
     static const HnswTypeInfo typeInfo = {
-        .maxDimensions = SPARSEVEC_MAX_DIM, .supportPQ = false,
+        .maxDimensions = SPARSEVEC_MAX_DIM, .supportPQ = false, .supportRabitQ = false,
         .itemSize = NULL, .normalize = sparsevec_l2_normalize, .checkValue = SparsevecCheckValue};
 
     PG_RETURN_POINTER(&typeInfo);

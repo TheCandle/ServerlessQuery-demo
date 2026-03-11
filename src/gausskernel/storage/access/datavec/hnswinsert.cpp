@@ -1,16 +1,31 @@
 /*
- * Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ * This file contains code from different sources, governed by different open source licenses.
  *
- * openGauss is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * 1. Code originating from the PostgreSQL project:
+ *    - Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ *    - This code is licensed under the PostgreSQL License.
+ *    - Permission is granted to use, copy, modify, and distribute this software in source and binary forms,
+ *      provided that the above copyright notice, this condition list, and the following disclaimer
+ *      are retained in source distributions, and reproduced in documentation/material provided with
+ *      binary distributions.
  *
- *          http://license.coscl.org.cn/MulanPSL2
+ * 2. Modifications and new code by Huawei Technologies Co., Ltd.:
+ *    - Portions Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ *    - This code is licensed under the Mulan Permissive Software License, Version 2 (Mulan PSL v2).
+ *    - Full license text available at: http://license.coscl.org.cn/MulanPSL2
  *
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PSL v2 for more details.
+ * 3. General Disclaimer (as required by the PostgreSQL License):
+ *    - THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+ *      OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ *      AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ *      CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *      DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *      DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *      IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ *      OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * By using this file, you acknowledge that you must comply with all applicable terms of both the
+ * PostgreSQL License and the Mulan PSL v2 for the respective code portions you utilize.
  * -------------------------------------------------------------------------
  *
  * hnswinsert.cpp
@@ -154,17 +169,26 @@ static void AddElementOnDisk(Relation index, HnswElement e, int m, BlockNumber i
     IndexTransInfo *idxXid;
     bool enablePQ;
     Size pqcodesSize;
+    bool enableRabitQ;
+    int dim;
 
-    /* Get enablePQ and pqcodeSize info from metapage */
+    /* Get info from metapage */
     Buffer metaBuf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
     LockBuffer(metaBuf, BUFFER_LOCK_SHARE);
     HnswMetaPage metap = HnswPageGetMeta(BufferGetPage(metaBuf));
     enablePQ = metap->enablePQ;
     pqcodesSize = metap->pqcodeSize;
+    enableRabitQ = metap->enableRabitQ;
+    dim = metap->dimensions;
     UnlockReleaseBuffer(metaBuf);
 
     /* Calculate sizes */
-    etupSize = HNSW_ELEMENT_TUPLE_SIZE(VARSIZE_ANY(HnswPtrAccess(base, e->value)));
+    if (enableRabitQ) {
+        Size rbqcodesSize = rbqCodeSize(dim);
+        etupSize = MAXALIGN(offsetof(HnswElementTupleData, data) + (rbqcodesSize));
+    } else {
+        etupSize = HNSW_ELEMENT_TUPLE_SIZE(VARSIZE_ANY(HnswPtrAccess(base, e->value)));
+    }
     ntupSize = HNSW_NEIGHBOR_TUPLE_SIZE(e->level, m);
     combinedSize = etupSize + MAXALIGN(pqcodesSize) + ntupSize + sizeof(ItemIdData);
     maxSize = HNSW_MAX_SIZE;
@@ -173,7 +197,7 @@ static void AddElementOnDisk(Relation index, HnswElement e, int m, BlockNumber i
 
     /* Prepare element tuple */
     etup = (HnswElementTuple)palloc0(etupSize);
-    HnswSetElementTuple(base, etup, e);
+    HnswSetElementTuple(base, etup, e, etupSize);
 
     /* Prepare neighbor tuple */
     ntup = (HnswNeighborTuple)palloc0(ntupSize);
@@ -393,7 +417,8 @@ static bool ConnectionExists(HnswElement e, HnswNeighborTuple ntup, int startIdx
  * Update neighbors
  */
 void HnswUpdateNeighborsOnDisk(Relation index, FmgrInfo *procinfo, Oid collation, HnswElement e, int m,
-                               bool checkExisting, bool building)
+                               bool checkExisting, bool building, bool enableRabitQ,
+                               RabitqInsertOnDiskParams *rbqDiskParams)
 {
     char *base = NULL;
 
@@ -424,7 +449,7 @@ void HnswUpdateNeighborsOnDisk(Relation index, FmgrInfo *procinfo, Oid collation
              */
 
             /* Select neighbors */
-            HnswUpdateConnection(NULL, e, hc, lm, lc, &idx, index, procinfo, collation);
+            HnswUpdateConnection(NULL, e, hc, lm, lc, &idx, index, procinfo, collation, enableRabitQ, rbqDiskParams);
 
             /* New element was not selected as a neighbor */
             if (idx == -1)
@@ -560,7 +585,8 @@ static bool FindDuplicateOnDisk(Relation index, HnswElement element, bool buildi
  * Update graph on disk
  */
 static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation, HnswElement element, int m,
-                              int efConstruction, HnswElement entryPoint, bool building)
+                              int efConstruction, HnswElement entryPoint, bool building, bool enableRabitQ,
+                              RabitqInsertOnDiskParams *rbqDiskParams)
 {
     BlockNumber newInsertPage = InvalidBlockNumber;
 
@@ -578,7 +604,7 @@ static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation,
     }
 
     /* Update neighbors */
-    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, false, building);
+    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, false, building, enableRabitQ, rbqDiskParams);
 
     /* Update entry point if needed */
     if (entryPoint == NULL || element->level > entryPoint->level) {
@@ -589,8 +615,8 @@ static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation,
 /*
  * Insert a tuple into the index
  */
-bool HnswInsertTupleOnDisk(Relation index, Datum value, Datum *values, const bool *isnull, ItemPointer heap_tid,
-                           bool building)
+bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, ItemPointer heap_tid,
+                           bool building, Relation heap)
 {
     HnswElement entryPoint;
     HnswElement element;
@@ -602,7 +628,13 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, Datum *values, const boo
     char *base = NULL;
     PQParams params;
     bool enablePQ;
+    bool enableRabitQ;
+    bool useFHT;
+    RabitqInsertOnDiskParams rbqDiskParams;
+    RabitQConfig *rbqConfig = NULL;
     int dim = TupleDescAttr(index->rd_att, 0)->atttypmod;
+    int funcType = GetFunctionType(procinfo, HnswOptionalProcInfo(index, HNSW_NORM_PROC));
+    float *centroid = (float *)palloc(dim * sizeof(float));
 
     /*
      * Get a shared lock. This allows vacuum to ensure no in-flight inserts
@@ -616,6 +648,26 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, Datum *values, const boo
 
     /* Create an element */
     element = HnswInitElement(base, heap_tid, m, HnswGetMl(m), HnswGetMaxLevel(m), NULL);
+
+    rbqConfig = InitRbqConfigOnDisk(index, &enableRabitQ, centroid, dim);
+    if (enableRabitQ) {
+        Size codesize = rbqCodeSize(dim);
+        Pointer rbqPtr = (Pointer)HnswAlloc(NULL, codesize);
+        HnswPtrStore(base, element->rbqcodes, rbqPtr);
+        /* hnsw insert on disk need to transform vector */
+        VectorTransform *vtrans = rbqConfig->vtrans;
+        Vector *transValue = InitVector(dim);
+        if (vtrans->type == RANDOM_ORTHOGONAL) {
+            RomTransform(vtrans, ((Vector *)DatumGetPointer(value))->x, transValue->x);
+        } else {
+            FhtTransform(vtrans, ((Vector *)DatumGetPointer(value))->x, transValue->x);
+        }
+        (&rbqDiskParams)->heap = heap;
+        (&rbqDiskParams)->vtrans = vtrans;
+        (&rbqDiskParams)->originInsertVec = value;
+        value = (Datum)transValue;
+    }
+
     HnswPtrStore(base, element->value, DatumGetPointer(value));
 
     /* Prevent concurrent inserts when likely updating entry point */
@@ -641,22 +693,28 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, Datum *values, const boo
     HnswPtrStore(base, element->pqcodes, codePtr);
 
     /* Find neighbors for element */
-    HnswFindElementNeighbors(base, element, entryPoint, index, procinfo, collation, m,
-                             efConstruction, false, enablePQ, &params);
+    HnswFindElementNeighbors(base, element, entryPoint, index, procinfo, collation, m, efConstruction,
+                             false, enablePQ, &params, enableRabitQ, funcType, centroid, &rbqDiskParams);
 
     /* Update graph on disk */
-    UpdateGraphOnDisk(index, procinfo, collation, element, m, efConstruction, entryPoint, building);
+    UpdateGraphOnDisk(index, procinfo, collation, element, m, efConstruction, entryPoint, building,
+                      enableRabitQ, &rbqDiskParams);
 
     /* Release lock */
     UnlockPage(index, HNSW_UPDATE_LOCK, lockmode);
 
+    pfree(centroid);
+    if (enableRabitQ) {
+        pfree(rbqConfig->vtrans);
+        pfree(rbqConfig);
+    }
     return true;
 }
 
 /*
  * Insert a tuple into the index
  */
-static void HnswInsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
+static void HnswInsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid, Relation heap)
 {
     Datum value;
     const HnswTypeInfo *typeInfo = HnswGetTypeInfo(index);
@@ -681,7 +739,7 @@ static void HnswInsertTuple(Relation index, Datum *values, bool *isnull, ItemPoi
         value = HnswNormValue(typeInfo, collation, value);
     }
 
-    HnswInsertTupleOnDisk(index, value, values, isnull, heap_tid, false);
+    HnswInsertTupleOnDisk(index, value, isnull, heap_tid, false, heap);
 }
 
 /*
@@ -707,7 +765,7 @@ bool hnswinsert_internal(Relation index, Datum *values, bool *isnull, ItemPointe
     oldCtx = MemoryContextSwitchTo(insertCtx);
 
     /* Insert tuple */
-    HnswInsertTuple(index, values, isnull, heap_tid);
+    HnswInsertTuple(index, values, isnull, heap_tid, heap);
 
     /* Delete memory context */
     MemoryContextSwitchTo(oldCtx);

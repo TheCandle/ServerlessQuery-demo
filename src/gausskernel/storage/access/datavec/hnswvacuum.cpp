@@ -1,16 +1,31 @@
 /*
- * Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ * This file contains code from different sources, governed by different open source licenses.
  *
- * openGauss is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * 1. Code originating from the PostgreSQL project:
+ *    - Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ *    - This code is licensed under the PostgreSQL License.
+ *    - Permission is granted to use, copy, modify, and distribute this software in source and binary forms,
+ *      provided that the above copyright notice, this condition list, and the following disclaimer
+ *      are retained in source distributions, and reproduced in documentation/material provided with
+ *      binary distributions.
  *
- *          http://license.coscl.org.cn/MulanPSL2
+ * 2. Modifications and new code by Huawei Technologies Co., Ltd.:
+ *    - Portions Copyright (c) 2024 Huawei Technologies Co.,Ltd.
+ *    - This code is licensed under the Mulan Permissive Software License, Version 2 (Mulan PSL v2).
+ *    - Full license text available at: http://license.coscl.org.cn/MulanPSL2
  *
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PSL v2 for more details.
+ * 3. General Disclaimer (as required by the PostgreSQL License):
+ *    - THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+ *      OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ *      AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ *      CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ *      DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *      DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ *      IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ *      OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * By using this file, you acknowledge that you must comply with all applicable terms of both the
+ * PostgreSQL License and the Mulan PSL v2 for the respective code portions you utilize.
  * -------------------------------------------------------------------------
  *
  * hnswvacuum.cpp
@@ -214,7 +229,7 @@ static void RepairGraphElement(HnswVacuumState *vacuumstate, HnswElement element
 
     /* Find neighbors for element, skipping itself */
     HnswFindElementNeighbors(base, element, entryPoint, index, procinfo, collation,
-                             m, efConstruction, true, false, NULL);
+                             m, efConstruction, true, false, NULL, false, -1, NULL, NULL); // todo wjy 最后两个参数为了编译通过临时设为false
 
     /* Zero memory for each element */
     MemSet(ntup, 0, HNSW_TUPLE_ALLOC_SIZE);
@@ -237,7 +252,7 @@ static void RepairGraphElement(HnswVacuumState *vacuumstate, HnswElement element
     UnlockReleaseBuffer(buf);
 
     /* Update neighbors */
-    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, true, false);
+    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, true, false, false, NULL);// todo wjy 最后两个参数为了编译通过临时设为false
 }
 
 /*
@@ -262,7 +277,7 @@ static void RepairGraphEntryPoint(HnswVacuumState *vacuumstate)
         LockPage(index, HNSW_UPDATE_LOCK, ShareLock);
 
         /* Load element */
-        HnswLoadElement(highestPoint, NULL, NULL, index, vacuumstate->procinfo, vacuumstate->collation, true, NULL);
+        HnswLoadElement(highestPoint, NULL, NULL, index, vacuumstate->procinfo, vacuumstate->collation, true, NULL, false, NULL, NULL);
 
         /* Repair if needed */
         if (NeedsUpdated(vacuumstate, highestPoint))
@@ -295,7 +310,7 @@ static void RepairGraphEntryPoint(HnswVacuumState *vacuumstate)
              * is outdated, this can remove connections at higher levels in
              * the graph until they are repaired, but this should be fine.
              */
-            HnswLoadElement(entryPoint, NULL, NULL, index, vacuumstate->procinfo, vacuumstate->collation, true, NULL);
+            HnswLoadElement(entryPoint, NULL, NULL, index, vacuumstate->procinfo, vacuumstate->collation, true, NULL, false, NULL, NULL);
 
             if (NeedsUpdated(vacuumstate, entryPoint)) {
                 /* Reset neighbors from previous update */
@@ -367,7 +382,7 @@ static void RepairGraph(HnswVacuumState *vacuumstate)
 
             /* Create an element */
             element = HnswInitElementFromBlock(blkno, offno);
-            HnswLoadElementFromTuple(element, etup, false, true);
+            HnswLoadElementFromTuple(element, etup, false, true, NULL, NULL); // todo wjy
 
             elements = lappend(elements, element);
         }
@@ -571,7 +586,7 @@ static void InitVacuumState(HnswVacuumState *vacuumstate, IndexVacuumInfo *info,
     /* Get m from metapage */
     HnswGetMetaPageInfo(index, &vacuumstate->m, NULL);
     HnswGetPQInfoFromMetaPage(index, &pqTableNblk, NULL, &pqDisTableNblk, NULL);
-    vacuumstate->hnswHeadBlkno = HNSW_PQTABLE_START_BLKNO + pqTableNblk + pqDisTableNblk;
+    vacuumstate->hnswHeadBlkno = HNSW_CHUNK_START_BLKNO + pqTableNblk + pqDisTableNblk;
 
     /* Create hash table */
     vacuumstate->deleted = tidhash_create(CurrentMemoryContext, 256, NULL);
