@@ -2145,7 +2145,7 @@ PGDLLEXPORT PG_FUNCTION_INFO_V1(hnsw_halfvec_support);
 Datum hnsw_halfvec_support(PG_FUNCTION_ARGS)
 {
     static const HnswTypeInfo typeInfo = {
-        .maxDimensions = HNSW_MAX_DIM * 2, .supportPQ = false, .supportRabitQ = true,
+        .maxDimensions = HNSW_MAX_DIM * 2, .supportPQ = false, .supportRabitQ = false,
         .itemSize = HalfvecItemSize, .normalize = halfvec_l2_normalize, .checkValue = NULL};
 
     PG_RETURN_POINTER(&typeInfo);
