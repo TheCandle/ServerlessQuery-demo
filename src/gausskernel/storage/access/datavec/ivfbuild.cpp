@@ -1500,7 +1500,6 @@ void TrainRefine(IvfflatBuildState *buildstate)
         return;
     }
     double num;
-    // EstimateRows(buildstate->heap, &num);
     int numSamples = (int)num;
     if (numSamples == 0) {
         buildstate->rbqDelayState = RBQ_BUILD_DELAY;
