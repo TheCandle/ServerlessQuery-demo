@@ -203,7 +203,7 @@ static void MMapDelete(BufferTag *tag, uint32 hashcode)
     return;
 }
 
-static bool CanUseMmap(Relation index)
+bool CanUseMmap(Relation index)
 {
     bool result = g_instance.attr.attr_storage.enable_mmap && u_sess->datavec_ctx.hnsw_use_mmap &&
                     g_mmapOff != 0 && (g_mmap_relNode == 0 || index->rd_node.relNode == g_mmap_relNode);

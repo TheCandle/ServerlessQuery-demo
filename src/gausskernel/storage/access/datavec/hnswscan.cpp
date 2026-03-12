@@ -208,6 +208,18 @@ void check_length(HnswScanOpaque so, IndexScanDesc scan)
         }
     }
 }
+
+bool isMulOverflowInt(int64 a, int64 b)
+{
+    if (a == 0 || b == 0) {
+        return true;
+    }
+    if (a > INT_MAX || a < INT_MIN || b > INT_MAX || b < INT_MIN) {
+        return false;
+    }
+    return (a > INT_MAX / b);
+}
+
 /*
  * Fetch the next tuple in the given scan
  */
@@ -242,6 +254,12 @@ bool hnswgettuple_internal(IndexScanDesc scan, ScanDirection dir)
         value = GetScanValue(scan);
 
         if (so->enableRabitQ) {
+            if (CanUseMmap(scan->indexRelation)) {
+                ereport(ERROR, (errmsg("HNSW_RABITQ dose not support mmap.")));
+            }
+            if (IS_HALFVEC(so->procinfo->fn_oid)) {
+                value = (Datum)Halfvec2Vector(value);
+            }
             RabitqQueryParams *rbqParams = so->rbqParams;
             rbqParams->heap = scan->heapRelation;
             rbqParams->normprocinfo = so->normprocinfo;
@@ -251,7 +269,9 @@ bool hnswgettuple_internal(IndexScanDesc scan, ScanDirection dir)
                 if (scan->limitk == -1) {
                     rbqParams->rbqConfig->kreorder = 0;
                 } else {
-                    rbqParams->rbqConfig->kreorder = (int64)ceil(u_sess->datavec_ctx.rbq_refinek * scan->limitk);
+                    bool overflow = isMulOverflowInt(u_sess->datavec_ctx.rbq_refinek, scan->limitk);
+                    rbqParams->rbqConfig->kreorder = overflow ? HNSW_RABITQ_MAX_REORDER :
+                                            (int64)ceil(u_sess->datavec_ctx.rbq_refinek * scan->limitk);
                 }
                 so->length = rbqParams->rbqConfig->kreorder > so->length ?
                              rbqParams->rbqConfig->kreorder : so->length;

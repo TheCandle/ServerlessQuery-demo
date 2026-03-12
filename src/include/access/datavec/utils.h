@@ -24,6 +24,7 @@
 #define HALF_L2_FUNC_OID 8644
 #define HALF_IP_FUNC_OID 8493
 #define CHUNK_STORAGE_SIZE (uint16)(6 * 1024)
+#define IS_HALFVEC(oid) (oid == HALF_L2_FUNC_OID || oid == HALF_IP_FUNC_OID)
 
 enum RefineType {
     SQ8,
@@ -91,6 +92,7 @@ void GetTupleFromHeap(Relation relation, ItemPointer tid, HeapTuple tuple);
 int GetFunctionType(FmgrInfo* procinfo, FmgrInfo* normprocinfo);
 int PQInit();
 void PQUinit();
+bool CanUseMmap(Relation index);
 
 typedef struct MmapShmemVal {
     BlockNumber blockNum;

@@ -1456,6 +1456,7 @@ static inline void cleanup_indexes(int nindexes, Relation* Irel, const Relation 
         ivinfo.estimated_count = true;
         ivinfo.message_level = elevel;
         ivinfo.invisibleParts = NULL;
+        ivinfo.heaprel = NULL;
 
         /*
          * if not handle the return value of index_vacuum_cleanup(),
