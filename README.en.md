@@ -374,6 +374,9 @@ Software dependency requirements are as follows:
 | glibc-devel   | 2.17-111            |
 | patch         | 2.7.1-10            |
 | lsb_release   | 4.1                 |
+| openblas-devel| 0.3.3 or later      |
+
+Note: The header files for openblas-devel are installed in /usr/include, which is typically the default path.
 
 ### Downloading openGauss
 
@@ -384,7 +387,6 @@ https://opengauss.org/zh/
 From the following website, you can obtain the binarylibs we have compiled. Please unzip it and rename to **binarylibs** after you download.
 
 https://opengauss.obs.cn-south-1.myhuaweicloud.com/2.1.0/openGauss-third_party_binarylibs.tar.gz
-
 
 Now we have completed openGauss code, for example, we store it in following directories.
 
