@@ -421,7 +421,7 @@ static bool ConnectionExists(HnswElement e, HnswNeighborTuple ntup, int startIdx
  */
 void HnswUpdateNeighborsOnDisk(Relation index, FmgrInfo *procinfo, Oid collation, HnswElement e, int m,
                                bool checkExisting, bool building, bool enableRabitQ,
-                               RabitqInsertOnDiskParams *rbqDiskParams)
+                               RabitqInsertOnDiskParams *rbqDiskParams, bool enableLsg)
 {
     char *base = NULL;
 
@@ -452,7 +452,8 @@ void HnswUpdateNeighborsOnDisk(Relation index, FmgrInfo *procinfo, Oid collation
              */
 
             /* Select neighbors */
-            HnswUpdateConnection(NULL, e, hc, lm, lc, &idx, index, procinfo, collation, enableRabitQ, rbqDiskParams);
+            HnswUpdateConnection(NULL, e, hc, lm, lc, &idx, index, procinfo, collation, enableRabitQ,
+                                 rbqDiskParams, enableLsg);
 
             /* New element was not selected as a neighbor */
             if (idx == -1)
@@ -589,7 +590,7 @@ static bool FindDuplicateOnDisk(Relation index, HnswElement element, bool buildi
  */
 static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation, HnswElement element, int m,
                               int efConstruction, HnswElement entryPoint, bool building, bool enableRabitQ,
-                              RabitqInsertOnDiskParams *rbqDiskParams, RabitQConfig *rbqConfig)
+                              RabitqInsertOnDiskParams *rbqDiskParams, RabitQConfig *rbqConfig, bool enableLsg)
 {
     BlockNumber newInsertPage = InvalidBlockNumber;
 
@@ -607,7 +608,8 @@ static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation,
     }
 
     /* Update neighbors */
-    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, false, building, enableRabitQ, rbqDiskParams);
+    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, false, building, enableRabitQ,
+                              rbqDiskParams, enableLsg);
 
     /* Update entry point if needed */
     if (entryPoint == NULL || element->level > entryPoint->level) {
@@ -716,7 +718,7 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
         if (enableLsg) {
             currentVec->isoValue = CalcIsoVal((float*)currentVec->x, LocScalingParam);
         } else {
-            currentVec->isoValue = 1.0;
+            currentVec->isoValue = Float32ToFloat16(1.0f);
         }
     }
 
@@ -729,11 +731,11 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
 
     /* Find neighbors for element */
     HnswFindElementNeighbors(base, element, entryPoint, index, procinfo, collation, m, efConstruction,
-                             false, enablePQ, &params, enableRabitQ, &rbqDiskParams);
+                             false, enablePQ, &params, enableRabitQ, &rbqDiskParams, enableLsg);
 
     /* Update graph on disk */
     UpdateGraphOnDisk(index, procinfo, collation, element, m, efConstruction, entryPoint, building,
-                      enableRabitQ, &rbqDiskParams, rbqConfig);
+                      enableRabitQ, &rbqDiskParams, rbqConfig, enableLsg);
 
     /* Release lock */
     UnlockPage(index, HNSW_UPDATE_LOCK, lockmode);
