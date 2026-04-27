@@ -54,8 +54,9 @@ typedef enum relopt_kind {
     RELOPT_KIND_IVFFLAT = (1 << 15),
     RELOPT_KIND_HNSW = (1 << 16),
     RELOPT_KIND_D_INDEX = (1 << 18),
+    RELOPT_KIND_BM25 = (1 << 19),
     /* if you add a new kind, make sure you update "last_default" too */
-    RELOPT_KIND_LAST_DEFAULT = RELOPT_KIND_D_INDEX,
+    RELOPT_KIND_LAST_DEFAULT = RELOPT_KIND_BM25,
     /* some compilers treat enums as signed ints, so we can't use 1 << 31 */
     RELOPT_KIND_MAX = (1 << 30)
 } relopt_kind;
