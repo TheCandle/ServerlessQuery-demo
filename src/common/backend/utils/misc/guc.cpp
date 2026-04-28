@@ -4669,6 +4669,12 @@ static const char* const map_old_guc_names[] = {"sort_mem", "work_mem", "vacuum_
 static int guc_var_compare(const void* a, const void* b);
 static int guc_name_compare(const char* namea, const char* nameb);
 static void InitializeGUCOptionsFromEnvironment(void);
+static inline bool is_guc_variable_in_instance_memory(void* var)
+{
+    return (var >= (void*)&g_instance &&
+            var < (void*)((char*)&g_instance + sizeof(knl_instance_context)));
+}
+
 static void InitializeOneGUCOption(struct config_generic* gconf);
 static void push_old_value(struct config_generic* gconf, GucAction action);
 static void ReportGUCOption(struct config_generic* record);
@@ -5601,8 +5607,12 @@ static void InitializeOneGUCOption(struct config_generic* gconf)
             if (conf->assign_hook)
                 (*conf->assign_hook)(newval, extra);
 
-            if (!IsUnderPostmaster || gconf->context != PGC_POSTMASTER) {
+            if (!IsUnderPostmaster ||
+                (gconf->context != PGC_POSTMASTER &&
+                 !is_guc_variable_in_instance_memory(conf->variable))) {
                 *conf->variable = conf->reset_val = newval;
+            } else {
+                conf->reset_val = newval;
             }
             conf->gen.extra = conf->reset_extra = extra;
             break;
@@ -5622,8 +5632,12 @@ static void InitializeOneGUCOption(struct config_generic* gconf)
             if (conf->assign_hook)
                 (*conf->assign_hook)(newval, extra);
 
-            if (!IsUnderPostmaster || gconf->context != PGC_POSTMASTER) {
+            if (!IsUnderPostmaster ||
+                (gconf->context != PGC_POSTMASTER &&
+                 !is_guc_variable_in_instance_memory(conf->variable))) {
                 *conf->variable = conf->reset_val = newval;
+            } else {
+                conf->reset_val = newval;
             }
             conf->gen.extra = conf->reset_extra = extra;
             break;
@@ -5641,8 +5655,12 @@ static void InitializeOneGUCOption(struct config_generic* gconf)
             if (conf->assign_hook)
                 (*conf->assign_hook)(newval, extra);
 
-            if (!IsUnderPostmaster || gconf->context != PGC_POSTMASTER) {
+            if (!IsUnderPostmaster ||
+                (gconf->context != PGC_POSTMASTER &&
+                 !is_guc_variable_in_instance_memory(conf->variable))) {
                 *conf->variable = conf->reset_val = newval;
+            } else {
+                conf->reset_val = newval;
             }
             conf->gen.extra = conf->reset_extra = extra;
             break;
@@ -5662,8 +5680,12 @@ static void InitializeOneGUCOption(struct config_generic* gconf)
             if (conf->assign_hook)
                 (*conf->assign_hook)(newval, extra);
 
-            if (!IsUnderPostmaster || gconf->context != PGC_POSTMASTER) {
+            if (!IsUnderPostmaster ||
+                (gconf->context != PGC_POSTMASTER &&
+                 !is_guc_variable_in_instance_memory(conf->variable))) {
                 *conf->variable = conf->reset_val = newval;
+            } else {
+                conf->reset_val = newval;
             }
             conf->gen.extra = conf->reset_extra = extra;
             break;
@@ -5691,8 +5713,12 @@ static void InitializeOneGUCOption(struct config_generic* gconf)
             if (conf->assign_hook)
                 (*conf->assign_hook)(newval, extra);
 
-            if (!IsUnderPostmaster || gconf->context != PGC_POSTMASTER) {
+            if (!IsUnderPostmaster ||
+                (gconf->context != PGC_POSTMASTER &&
+                 !is_guc_variable_in_instance_memory(conf->variable))) {
                 *conf->variable = conf->reset_val = newval;
+            } else {
+                conf->reset_val = newval;
             }
             conf->gen.extra = conf->reset_extra = extra;
             break;
@@ -5709,8 +5735,12 @@ static void InitializeOneGUCOption(struct config_generic* gconf)
             if (conf->assign_hook)
                 (*conf->assign_hook)(newval, extra);
 
-            if (!IsUnderPostmaster || gconf->context != PGC_POSTMASTER) {
+            if (!IsUnderPostmaster ||
+                (gconf->context != PGC_POSTMASTER &&
+                 !is_guc_variable_in_instance_memory(conf->variable))) {
                 *conf->variable = conf->reset_val = newval;
+            } else {
+                conf->reset_val = newval;
             }
             conf->gen.extra = conf->reset_extra = extra;
             break;
