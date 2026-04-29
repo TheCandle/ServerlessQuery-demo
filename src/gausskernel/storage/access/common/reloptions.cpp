@@ -125,6 +125,7 @@ static relopt_bool boolRelOpts[] = {
     {{"compress_byte_convert", "Whether do byte convert in compression", RELOPT_KIND_HEAP | RELOPT_KIND_BTREE}, false},
     {{"compress_diff_convert", "Whether do diiffer convert in compression", RELOPT_KIND_HEAP | RELOPT_KIND_BTREE},
      false},
+    {{"enable_lsg", "LSG feature switch", RELOPT_KIND_HNSW}, false},
     {{"deduplication", "Enables \"deduplication\" feature for btree index", RELOPT_KIND_BTREE}, false},
     {{"enable_pq", "Whether to enable PQ", RELOPT_KIND_HNSW | RELOPT_KIND_IVFFLAT }, GENERIC_DEFAULT_ENABLE_PQ },
     {{"use_mmap", "Whether to enable use mmap during hnsw search", RELOPT_KIND_HNSW }, GENERIC_DEFAULT_USE_MMAP },
@@ -288,6 +289,10 @@ static relopt_int intRelOpts[] = {
      GENERIC_DEFAULT_PQ_KSUB,
      GENERIC_MIN_PQ_KSUB,
      GENERIC_MAX_PQ_KSUB },
+    {{ "lsg_degree", "Number of lsg degree", RELOPT_KIND_HNSW },
+     GENERIC_DEFAULT_LSG_DEGREE,
+     GENERIC_MIN_LSG_DEGREE,
+     GENERIC_MAX_LSG_DEGREE },
     {{ "lists", "Number of inverted lists", RELOPT_KIND_IVFFLAT },
      IVFFLAT_DEFAULT_LISTS,
      IVFFLAT_MIN_LISTS,
@@ -362,6 +367,10 @@ static relopt_real realRelOpts[] = {
      0,
      -1.0,
      DBL_MAX },
+    {{ "lsg_alpha", "Sets the HNSW LSG alpha", RELOPT_KIND_HNSW },
+     2.0,
+     0,
+     3.0 },
     /* list terminator */
     {{NULL}}
 };

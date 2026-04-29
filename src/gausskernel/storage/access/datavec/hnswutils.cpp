@@ -55,6 +55,7 @@
 #include "utils/rel_gs.h"
 
 #include "utils/hashutils.h"
+#include "access/datavec/hnswlsg.h"
 
 static inline uint64 murmurhash64(uint64 data)
 {
@@ -177,6 +178,39 @@ bool HnswGetEnablePQ(Relation index)
     }
 
     return GENERIC_DEFAULT_ENABLE_PQ;
+}
+
+bool HnswGetEnableLsg(Relation index)
+{
+    HnswOptions *opts = (HnswOptions *)index->rd_options;
+
+    if (opts) {
+        return opts->enableLsg;
+    }
+
+    return GENERIC_DEFAULT_USE_LSG;
+}
+
+int HnswGetLsgDegree(Relation index)
+{
+    HnswOptions *opts = (HnswOptions *)index->rd_options;
+
+    if (opts) {
+        return opts->lsgDegree;
+    }
+
+    return GENERIC_DEFAULT_LSG_DEGREE;
+}
+
+double HnswGetLsgAlpha(Relation index)
+{
+    HnswOptions *opts = (HnswOptions *)index->rd_options;
+
+    if (opts) {
+        return opts->lsgAlpha;
+    }
+
+    return GENERIC_DEFAULT_LSG_ALPHA;
 }
 
 bool HnswGetEnableMMap(Relation index)
@@ -696,6 +730,31 @@ LoadPQcode(HnswElementTuple tuple)
     return (uint8*)(((char*)(tuple)) + HNSW_ELEMENT_TUPLE_SIZE(VARSIZE_ANY(&tuple->data)));
 }
 
+void FlushLsgSamples(HnswBuildState *buildstate)
+{
+    uint32 lsgCodeBookSize;
+    uint16 nBlks;
+    char *codeBookPtr = (char *)buildstate->LocScalingParam->sampleVecs;
+    Relation index = buildstate->index;
+    HnswGetLsgInfoFromMetaPage(index, &lsgCodeBookSize, &nBlks, NULL, NULL, NULL);
+
+    for (int i = 0; i < nBlks; i++) {
+        uint32 curFlushSize = (i == nBlks - 1) ?
+            (lsgCodeBookSize - i * LSGSAMPLE_STORAGE_SIZE) : LSGSAMPLE_STORAGE_SIZE;
+        Buffer buf = ReadBufferExtended(index, MAIN_FORKNUM, HNSW_LSG_SAMPLE_START_BLKNO + i, RBM_ZERO, NULL);
+        LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
+
+        Page page = BufferGetPage(buf);
+        errno_t err =
+            memcpy_s(PageGetContents(page), curFlushSize, codeBookPtr + i * LSGSAMPLE_STORAGE_SIZE, curFlushSize);
+        securec_check(err, "\0", "\0");
+
+        ((PageHeader)page)->pd_lower += curFlushSize;
+        MarkBufferDirty(buf);
+        UnlockReleaseBuffer(buf);
+    }
+}
+
 /*
  * Set element tuple, except for neighbor info
  */
@@ -1039,7 +1098,12 @@ static float GetCandidateDistance(char *base, HnswElement element, Datum q, Fmgr
 {
     Datum value = HnswGetValue(base, element);
 
-    return DatumGetFloat8(FunctionCall2Coll(procinfo, collation, q, value));
+    float iso1 = ((Vector *)q)->isoValue;
+    float iso2 = ((Vector *)value)->isoValue;
+    float isoWeight = iso1 * iso2;
+    float realDis = DatumGetFloat8(FunctionCall2Coll(procinfo, collation, q, value));
+
+    return isoWeight * realDis;
 }
 
 /*
@@ -1576,7 +1640,12 @@ static float HnswGetDistance(char *base, HnswElement a, HnswElement b, FmgrInfo 
     Datum aValue = HnswGetValue(base, a);
     Datum bValue = HnswGetValue(base, b);
 
-    return DatumGetFloat8(FunctionCall2Coll(procinfo, collation, aValue, bValue));
+    float iso1 = ((Vector *)aValue)->isoValue;
+    float iso2 = ((Vector *)bValue)->isoValue;
+    float isoWeight = iso1 * iso2;
+    float realDis = DatumGetFloat8(FunctionCall2Coll(procinfo, collation, aValue, bValue));
+
+    return isoWeight * realDis;
 }
 
 /*
@@ -1950,6 +2019,34 @@ void HnswGetPQInfoFromMetaPage(Relation index, uint16 *pqTableNblk, uint32 *pqTa
     UnlockReleaseBuffer(buf);
 }
 
+void HnswGetLsgInfoFromMetaPage(Relation index, uint32 *lsgCodeBookSize, uint16 *nBlks, uint32 *lsgDim,
+                                uint32 *lsgSampleSize, bool *enableLsg)
+{
+    Buffer buf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
+    LockBuffer(buf, BUFFER_LOCK_SHARE);
+
+    Page page = BufferGetPage(buf);
+    HnswMetaPage metap = HnswPageGetMeta(page);
+
+    if (lsgCodeBookSize != NULL) {
+        *lsgCodeBookSize = metap->lsgCodeBookSize;
+    }
+    if (nBlks != NULL) {
+        *nBlks = metap->lsgSampleNblk;
+    }
+    if (lsgDim != NULL) {
+        *lsgDim = metap->dimensions;
+    }
+    if (lsgSampleSize != NULL) {
+        *lsgSampleSize = metap->lsgSampleSize;
+    }
+    if (enableLsg != NULL) {
+        *enableLsg = metap->enableLsg;
+    }
+
+    UnlockReleaseBuffer(buf);
+}
+
 void InitPQParamsOnDisk(PQParams *params, Relation index, FmgrInfo *procinfo, int dim, bool *enablePQ, bool trymmap)
 {
     const HnswTypeInfo *typeInfo = HnswGetTypeInfo(index);
@@ -2123,6 +2220,43 @@ void HnswComputeVectorRBQCode(HnswElement element, Vector *transformedVec, float
 {
     RabitqVector *rbqVec = (RabitqVector *)HnswPtrAccess(base, element->rbqcodes);
     ComputeVectorRBQCode(transformedVec->dim, transformedVec->x, rbqVec, centroid, funcType);
+}
+
+void InitLsgSamplesOnDisk(Relation index, FmgrInfo *procinfo, LsgCalculator **LocScalingParam, bool *enableLsg)
+{
+    uint32 codeBookSize;
+    uint16 nBlks;
+    uint32 dim;
+    uint32 sampleSize;
+
+    HnswGetLsgInfoFromMetaPage(index, &codeBookSize, &nBlks, &dim, &sampleSize, enableLsg);
+
+    if (*enableLsg) {
+        if (index->sampleVec == NULL) {
+            MemoryContext oldcxt = MemoryContextSwitchTo(index->rd_indexcxt);
+            index->sampleVec = (float *)palloc0(codeBookSize);
+            for (int16 i = 0; i < nBlks; i++) {
+                uint32 curFlushSize =
+                    (i == nBlks - 1) ? (codeBookSize - i * LSGSAMPLE_STORAGE_SIZE) : LSGSAMPLE_STORAGE_SIZE;
+                Buffer buf = ReadBuffer(index, HNSW_LSG_SAMPLE_START_BLKNO + i);
+                LockBuffer(buf, BUFFER_LOCK_SHARE);
+
+                Page page = BufferGetPage(buf);
+                errno_t err = memcpy_s((char *)index->sampleVec + i * LSGSAMPLE_STORAGE_SIZE,
+                                       codeBookSize - i * LSGSAMPLE_STORAGE_SIZE,
+                                       PageGetContents(page), curFlushSize);
+                securec_check(err, "\0", "\0");
+
+                UnlockReleaseBuffer(buf);
+            }
+            (void)MemoryContextSwitchTo(oldcxt);
+        }
+
+        *LocScalingParam = (LsgCalculator *)palloc0(sizeof(LsgCalculator));
+        InitScalingParam(*LocScalingParam, sampleSize, dim, index->sampleVec,
+                         GetLsgfunctionType(procinfo, HnswOptionalProcInfo(index, HNSW_NORM_PROC)),
+                         HnswGetLsgDegree(index), HnswGetLsgAlpha(index));
+    }
 }
 
 static void SparsevecCheckValue(Pointer v)
