@@ -29,6 +29,14 @@
 #include "utils/selfuncs.h"
 #include "access/datavec/diskann.h"
 
+static void CheckDiskAnnPQUnsupported(bool enablePQ)
+{
+    if (enablePQ) {
+        ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        errmsg("diskann pq is temporarily unsupported on 6.0.0")));
+    }
+}
+
 /*
  * Estimate the cost of an index scan
  */
@@ -88,6 +96,7 @@ static bytea* diskannoptions_internal(Datum reloptions, bool validate)
     options = parseRelOptions(reloptions, validate, RELOPT_KIND_DISKANN, &numoptions);
     rdopts = (DiskAnnOptions*)allocateReloptStruct(sizeof(DiskAnnOptions), options, numoptions);
     fillRelOptions((void*)rdopts, sizeof(DiskAnnOptions), options, numoptions, validate, tab, lengthof(tab));
+    CheckDiskAnnPQUnsupported(rdopts->enablePQ);
 
     return (bytea*)rdopts;
 }
@@ -318,6 +327,7 @@ bool diskanninsert_internal(Relation index, Datum* values, const bool* isnull, I
 
     DiskAnnMetaPageData metapage;
     DiskANNGetMetaPageInfo(index, &metapage);
+    CheckDiskAnnPQUnsupported(metapage.enablePQ);
     FmgrInfo* procinfo = index_getprocinfo(index, 1, DISKANN_DISTANCE_PROC);
     metapage.params = InitDiskPQParamsOnDisk(index, procinfo, metapage.dimensions, metapage.enablePQ, true);
 

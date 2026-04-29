@@ -86,6 +86,10 @@ IndexScanDesc diskannbeginscan_internal(Relation index, int nkeys, int norderbys
     so->frozenBlks = VectorList<BlockNumber>();
     so->candidates = VectorList<DiskAnnCandidatesData>();
     so->enablePQ = metapage.enablePQ;
+    if (so->enablePQ) {
+        ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                        errmsg("diskann pq is temporarily unsupported on 6.0.0")));
+    }
     so->procinfo = index_getprocinfo(index, 1, DISKANN_DISTANCE_PROC);
     DiskPQParams *tmpDiskPQParams = InitDiskPQParamsOnDisk(index, so->procinfo, metapage.dimensions, so->enablePQ);
     if (tmpDiskPQParams != NULL) {
@@ -381,4 +385,3 @@ DiskAnnAliveSlaveIterator *CreateSlaveIterator(Relation index, BlockNumber verte
     iter->nextVertex = InvalidBlockNumber;
     return iter;
 }
-
