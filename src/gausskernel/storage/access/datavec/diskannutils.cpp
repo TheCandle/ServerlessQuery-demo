@@ -1325,7 +1325,7 @@ DiskPQParams* InitDiskPQParamsOnDisk(Relation index, FmgrInfo *procinfo, int dim
                                "but this instance has not currently loaded the PQ dynamic library.")));
     }
 
-    params->funcType = GetPQfunctionType(procinfo, DiskAnnOptionalProcInfo(index, DISKANN_NORM_PROC));
+    params->funcType = GetFunctionType(procinfo, DiskAnnOptionalProcInfo(index, DISKANN_NORM_PROC));
     params->dim = dim;
     
     uint16 pqTableNblk;
@@ -1387,4 +1387,3 @@ DiskPQParams* InitDiskPQParamsOnDisk(Relation index, FmgrInfo *procinfo, int dim
 
     return params;
 }
-

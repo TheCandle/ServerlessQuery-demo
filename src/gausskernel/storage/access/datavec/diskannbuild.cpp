@@ -894,7 +894,7 @@ DiskPQParams *InitDiskPQParams(DiskAnnBuildState *buildstate)
 {
     DiskPQParams *params = (DiskPQParams*)palloc(sizeof(DiskPQParams));
     params->dim = buildstate->dimensions;
-    params->funcType = GetPQfunctionType(buildstate->procinfo, buildstate->normprocinfo);
+    params->funcType = GetFunctionType(buildstate->procinfo, buildstate->normprocinfo);
     params->pqChunks = buildstate->pqM;
     params->pqTable = NULL;
     params->tablesTransposed = NULL;

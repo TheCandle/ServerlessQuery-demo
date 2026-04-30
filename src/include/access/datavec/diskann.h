@@ -33,6 +33,8 @@
 #include "access/datavec/utils.h"
 #include "access/amapi.h"
 
+#include <cstring>
+
 #define DISKANN_FUNC_NUM 4
 
 #define DISKANN_VERSION 1
@@ -631,7 +633,10 @@ void ReleaseIterator(VamanaVertexNbIterator *iter);
 float ComputeL2DistanceFast(const float *u, const double su, const float *v, const double sv, uint16_t dim);
 DiskAnnAliveSlaveIterator *CreateSlaveIterator(Relation index, BlockNumber vertex,
                                                float *query, uint16_t dim, double sqrsum);
-double VectorSquareNorm(const float *a, int dim);
+static inline double VectorSquareNorm(const float *a, int dim)
+{
+    return vector_square((float *)a, dim);
+}
 BlockNumber InsertTuple(Relation index, Datum* values, ItemPointer heaptid, DiskAnnMetaPage metaPage, bool building);
 void DeleteDiskAnnIndexTuples(TupleTableSlot* slot, ItemPointer tid, EState* estate, Partition p);
 
@@ -695,4 +700,3 @@ void LoadPQInfo(Relation index, dataT *&data, BlockNumber startBlkno, uint16 nbl
 }
 
 #endif
-

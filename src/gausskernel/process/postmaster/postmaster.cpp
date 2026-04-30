@@ -3150,8 +3150,9 @@ int PostmasterMain(int argc, char* argv[])
     }
 
     /* init datavec pq */
+    int ret = 0;
     if (g_instance.attr.attr_storage.enable_pq) {
-        int ret = PQInit();
+        ret = PQInit();
         if (ret != 0) {
             ereport(PANIC, (errmsg("datavec PQ init failed, ret: %d", ret)));
         }
