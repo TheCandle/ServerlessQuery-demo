@@ -231,7 +231,7 @@ static void RepairGraphElement(HnswVacuumState *vacuumstate, HnswElement element
     /* Find neighbors for element, skipping itself */
     HnswFindElementNeighbors(base, element, entryPoint, index, procinfo, collation,
                              m, efConstruction, true, false, NULL, vacuumstate->enableRabitQ,
-                             vacuumstate->rbqDiskParams);
+                             vacuumstate->rbqDiskParams, vacuumstate->enableLsg);
     /* Zero memory for each element */
     MemSet(ntup, 0, HNSW_TUPLE_ALLOC_SIZE);
 
@@ -254,7 +254,7 @@ static void RepairGraphElement(HnswVacuumState *vacuumstate, HnswElement element
 
     /* Update neighbors */
     HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, true, false,
-                              vacuumstate->enableRabitQ, vacuumstate->rbqDiskParams);
+                              vacuumstate->enableRabitQ, vacuumstate->rbqDiskParams, vacuumstate->enableLsg);
 }
 
 /*
@@ -583,6 +583,34 @@ static void MarkDeleted(HnswVacuumState *vacuumstate)
 /*
  * Initialize the vacuum state
  */
+static void InitVacuumRbqState(HnswVacuumState *vacuumstate, IndexVacuumInfo *info, RabitQConfig *rbqConfig, int dim)
+{
+    if (!vacuumstate->enableRabitQ) {
+        vacuumstate->rbqDiskParams = NULL;
+        return;
+    }
+
+    if (info->heaprel == NULL) {
+        ereport(ERROR, (errmsg("HNSW RabitQ bulkdelete need heap relation.")));
+    }
+
+    RabitqInsertOnDiskParams *params = (RabitqInsertOnDiskParams *)palloc(sizeof(RabitqInsertOnDiskParams));
+    params->heap = info->heaprel;
+    params->normprocinfo = HnswOptionalProcInfo(vacuumstate->index, HNSW_NORM_PROC);
+    params->collation = vacuumstate->collation;
+    params->funcType = GetFunctionType(vacuumstate->procinfo, params->normprocinfo);
+    params->heapTuple = (HeapTupleData *)heaptup_alloc(BLCKSZ);
+    params->indexInfo = BuildIndexInfo(vacuumstate->index);
+    params->vtrans = rbqConfig->vtrans;
+    vacuumstate->rbqDiskParams = params;
+    vacuumstate->rbqcodesSize = rbqCodeSize(dim, rbqConfig->reType == SQ8);
+
+    if (rbqConfig->sq != NULL) {
+        pfree(rbqConfig->sq);
+    }
+    pfree(rbqConfig);
+}
+
 static void InitVacuumState(HnswVacuumState *vacuumstate, IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
                             IndexBulkDeleteCallback callback, void *callbackState)
 {
@@ -605,6 +633,7 @@ static void InitVacuumState(HnswVacuumState *vacuumstate, IndexVacuumInfo *info,
     vacuumstate->bas = GetAccessStrategy(BAS_BULKREAD);
     vacuumstate->procinfo = index_getprocinfo(index, 1, HNSW_DISTANCE_PROC);
     vacuumstate->collation = index->rd_indcollation[0];
+    vacuumstate->enableLsg = HnswGetEnableLsg(index);
     vacuumstate->ntup = (HnswNeighborTuple)palloc0(HNSW_TUPLE_ALLOC_SIZE);
     vacuumstate->tmpCtx =
         AllocSetContextCreate(CurrentMemoryContext, "Hnsw vacuum temporary context", ALLOCSET_DEFAULT_SIZES);
@@ -613,29 +642,7 @@ static void InitVacuumState(HnswVacuumState *vacuumstate, IndexVacuumInfo *info,
     HnswGetMetaPageInfo(index, &vacuumstate->m, NULL);
 
     RabitQConfig *rbqConfig = InitRbqConfigOnDisk(index, &vacuumstate->enableRabitQ, &centroid, dim);
-
-    if (vacuumstate->enableRabitQ) {
-        if (info->heaprel == NULL) {
-            ereport(ERROR, (errmsg("HNSW RabitQ bulkdelete need heap relation.")));
-        }
-        RabitqInsertOnDiskParams *params = (RabitqInsertOnDiskParams *)palloc(sizeof(RabitqInsertOnDiskParams));
-        params->heap = info->heaprel;
-        params->normprocinfo = HnswOptionalProcInfo(index, HNSW_NORM_PROC);
-        params->collation = vacuumstate->collation;
-        params->funcType = GetFunctionType(vacuumstate->procinfo, params->normprocinfo);
-        params->heapTuple = (HeapTupleData *)heaptup_alloc(BLCKSZ);
-        params->indexInfo = BuildIndexInfo(index);
-        params->vtrans = rbqConfig->vtrans;
-        vacuumstate->rbqDiskParams = params;
-        bool refineSQ8 = rbqConfig->reType == SQ8;
-        vacuumstate->rbqcodesSize = rbqCodeSize(dim, refineSQ8);
-        if (rbqConfig->sq != NULL) {
-            pfree(rbqConfig->sq);
-        }
-        pfree(rbqConfig);
-    } else {
-        vacuumstate->rbqDiskParams = NULL;
-    }
+    InitVacuumRbqState(vacuumstate, info, rbqConfig, dim);
 
     HnswGetPQInfoFromMetaPage(index, &pqTableNblk, NULL, &pqDisTableNblk, NULL);
     HnswGetRbqInfoFromMetaPage(index, NULL, NULL, NULL, NULL, &matrixNblk,

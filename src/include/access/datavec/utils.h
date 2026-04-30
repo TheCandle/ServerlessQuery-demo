@@ -7,6 +7,7 @@
 
 #define GENERIC_DEFAULT_ENABLE_PQ false
 #define GENERIC_DEFAULT_USE_MMAP false
+#define GENERIC_DEFAULT_USE_LSG false
 #define GENERIC_DEFAULT_ENABLE_RABITQ false
 #define GENERIC_DEFAULT_USE_FHT false
 #define GENERIC_DEFAULT_REFINE_TYPE SQ8
@@ -16,6 +17,10 @@
 #define GENERIC_DEFAULT_PQ_KSUB 256
 #define GENERIC_MIN_PQ_KSUB 1
 #define GENERIC_MAX_PQ_KSUB 256
+#define GENERIC_DEFAULT_LSG_DEGREE 96
+#define GENERIC_MIN_LSG_DEGREE 32
+#define GENERIC_MAX_LSG_DEGREE 128
+#define GENERIC_DEFAULT_LSG_ALPHA 2.0
 #define DIS_L2 1
 #define DIS_IP 2
 #define DIS_COSINE 3
@@ -23,10 +28,18 @@
 #define IP_FUNC_OID 8434
 #define HALF_L2_FUNC_OID 8644
 #define HALF_IP_FUNC_OID 8493
+#define SPARSE_L2_FUNC_OID 8470
+#define SPARSE_IP_FUNC_OID 8463
+#define SPARSE_L1_FUNC_OID 8467
+#define BIT_JACCARD_FUNC_OID 8468
+#define BIT_HAMMING_FUNC_OID 8469
 #define CHUNK_STORAGE_SIZE (uint16)(6 * 1024)
+#define LSGSAMPLE_STORAGE_SIZE (uint16)(6 * 1024)
 #define DEFAULT_TARGET_ROWS 300
 #define TUPLE_NUM 100
 #define IS_HALFVEC(oid) (oid == HALF_L2_FUNC_OID || oid == HALF_IP_FUNC_OID)
+#define IS_SPARSEVEC(oid) (oid == SPARSE_L2_FUNC_OID || oid == SPARSE_IP_FUNC_OID || oid == SPARSE_L1_FUNC_OID)
+#define IS_BITVEC(oid) (oid == BIT_JACCARD_FUNC_OID || oid == BIT_HAMMING_FUNC_OID)
 
 enum RefineType {
     SQ8,
@@ -41,6 +54,13 @@ typedef struct VectorArrayData {
     Size itemsize;
     char *items;
 } VectorArrayData;
+
+typedef enum {
+    LSG_L2_DIST = 0,
+    LSG_IP_DIST,
+    LSG_COS_DIST,
+    INVALID_LSG_DIST
+} LsgDistType;
 
 typedef struct PQParams {
     int pqM;
@@ -115,6 +135,7 @@ void EstimateRows(Relation onerel, double *totalrows);
 int GetFunctionType(FmgrInfo* procinfo, FmgrInfo* normprocinfo);
 int PQInit();
 void PQUinit();
+LsgDistType GetLsgfunctionType(FmgrInfo *procinfo, FmgrInfo *normprocinfo);
 bool CanUseMmap(Relation index);
 
 typedef struct MmapShmemVal {

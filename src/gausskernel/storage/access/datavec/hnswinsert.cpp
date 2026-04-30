@@ -421,7 +421,7 @@ static bool ConnectionExists(HnswElement e, HnswNeighborTuple ntup, int startIdx
  */
 void HnswUpdateNeighborsOnDisk(Relation index, FmgrInfo *procinfo, Oid collation, HnswElement e, int m,
                                bool checkExisting, bool building, bool enableRabitQ,
-                               RabitqInsertOnDiskParams *rbqDiskParams)
+                               RabitqInsertOnDiskParams *rbqDiskParams, bool enableLsg)
 {
     char *base = NULL;
 
@@ -452,7 +452,8 @@ void HnswUpdateNeighborsOnDisk(Relation index, FmgrInfo *procinfo, Oid collation
              */
 
             /* Select neighbors */
-            HnswUpdateConnection(NULL, e, hc, lm, lc, &idx, index, procinfo, collation, enableRabitQ, rbqDiskParams);
+            HnswUpdateConnection(NULL, e, hc, lm, lc, &idx, index, procinfo, collation, enableRabitQ,
+                                 rbqDiskParams, enableLsg);
 
             /* New element was not selected as a neighbor */
             if (idx == -1)
@@ -589,7 +590,7 @@ static bool FindDuplicateOnDisk(Relation index, HnswElement element, bool buildi
  */
 static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation, HnswElement element, int m,
                               int efConstruction, HnswElement entryPoint, bool building, bool enableRabitQ,
-                              RabitqInsertOnDiskParams *rbqDiskParams, RabitQConfig *rbqConfig)
+                              RabitqInsertOnDiskParams *rbqDiskParams, RabitQConfig *rbqConfig, bool enableLsg)
 {
     BlockNumber newInsertPage = InvalidBlockNumber;
 
@@ -607,7 +608,8 @@ static void UpdateGraphOnDisk(Relation index, FmgrInfo *procinfo, Oid collation,
     }
 
     /* Update neighbors */
-    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, false, building, enableRabitQ, rbqDiskParams);
+    HnswUpdateNeighborsOnDisk(index, procinfo, collation, element, m, false, building, enableRabitQ,
+                              rbqDiskParams, enableLsg);
 
     /* Update entry point if needed */
     if (entryPoint == NULL || element->level > entryPoint->level) {
@@ -637,6 +639,8 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
     RabitQConfig *rbqConfig = NULL;
     int dim = TupleDescAttr(index->rd_att, 0)->atttypmod;
     float *centroid = NULL;
+    LsgCalculator* LocScalingParam = NULL;
+    bool enableLsg = false;
 
     /*
      * Get a shared lock. This allows vacuum to ensure no in-flight inserts
@@ -708,6 +712,15 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
     }
 
     InitPQParamsOnDisk(&params, index, procinfo, dim, &enablePQ, false);
+    InitLsgSamplesOnDisk(index, procinfo, &LocScalingParam, &enableLsg);
+    if (LocScalingParam != NULL && !IS_SPARSEVEC(procinfo->fn_oid) && !IS_BITVEC(procinfo->fn_oid)) {
+        Vector* currentVec = (Vector*)HnswGetValue(base, element);
+        if (enableLsg) {
+            currentVec->isoValue = CalcIsoVal((float*)currentVec->x, LocScalingParam);
+        } else {
+            currentVec->isoValue = Float32ToFloat16(1.0f);
+        }
+    }
 
     Pointer codePtr = NULL;
     if (enablePQ) {
@@ -718,11 +731,11 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
 
     /* Find neighbors for element */
     HnswFindElementNeighbors(base, element, entryPoint, index, procinfo, collation, m, efConstruction,
-                             false, enablePQ, &params, enableRabitQ, &rbqDiskParams);
+                             false, enablePQ, &params, enableRabitQ, &rbqDiskParams, enableLsg);
 
     /* Update graph on disk */
     UpdateGraphOnDisk(index, procinfo, collation, element, m, efConstruction, entryPoint, building,
-                      enableRabitQ, &rbqDiskParams, rbqConfig);
+                      enableRabitQ, &rbqDiskParams, rbqConfig, enableLsg);
 
     /* Release lock */
     UnlockPage(index, HNSW_UPDATE_LOCK, lockmode);
@@ -730,6 +743,14 @@ bool HnswInsertTupleOnDisk(Relation index, Datum value, const bool *isnull, Item
     if (enableRabitQ) {
         pfree((&rbqDiskParams)->heapTuple);
         pfree((&rbqDiskParams)->indexInfo);
+    }
+    if (LocScalingParam != NULL) {
+        if (LocScalingParam->sampleVecs != NULL) {
+            pfree(LocScalingParam->sampleVecs);
+            LocScalingParam->sampleVecs = NULL;
+        }
+        pfree(LocScalingParam);
+        LocScalingParam = NULL;
     }
 
     return true;
