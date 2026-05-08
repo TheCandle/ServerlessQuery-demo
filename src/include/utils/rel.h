@@ -301,7 +301,7 @@ typedef struct RelationData {
     struct LocalRelationEntry *entry;
 
     /* used only for datavec pq */
-    char *pqTable;
+    char *pqTable; /* For diskann pq below, we store the non-transposed pqtable here */
     float *pqDistanceTable; 
     bool rd_optionsValid;
 
@@ -311,6 +311,11 @@ typedef struct RelationData {
 
     /* used only for datavec hnsw lsg */
     float* sampleVec;
+
+    /* used only for datavec diskann */
+    char *diskPQTableTransposed;
+    char *centroids;
+    uint32 *offsets;
 } RelationData;
 
 /*
@@ -904,4 +909,3 @@ extern void SetupPageCompressForRelation(RelFileNode* node, PageCompressOpts* co
 extern bool IsRelationReplidentKey(Relation r, int attno);
 
 #endif /* REL_H */
-

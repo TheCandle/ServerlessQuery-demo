@@ -1496,6 +1496,7 @@ static void knl_u_datavec_init(knl_u_datavec_context* datavec_cxt)
     datavec_cxt->ivfflat_probes = 0;
     datavec_cxt->ivfpq_kreorder = 0;
     datavec_cxt->rbq_refinek = 0.0;
+    datavec_cxt->diskann_probes = 0;
 }
 
 static void knl_u_bm25_init(knl_u_bm25_context* bm25_context)

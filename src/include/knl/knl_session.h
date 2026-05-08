@@ -3032,6 +3032,7 @@ typedef struct knl_u_datavec_context {
     double rbq_refinek;
     int ivfflat_probes;
     int ivfpq_kreorder;
+    int diskann_probes;
     bool hnsw_use_mmap;
 } knl_u_datavec_context;
 
@@ -3295,4 +3296,3 @@ inline bool has_backend_cursor_stream()
 }
 
 #endif /* SRC_INCLUDE_KNL_KNL_SESSION_H_ */
-

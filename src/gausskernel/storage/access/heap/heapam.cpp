@@ -4483,7 +4483,7 @@ static inline bool xmax_infomask_changed(uint16 new_infomask, uint16 new_infomas
  * (t_xmax is needed to verify that the replacement tuple matches.)
  */
 TM_Result heap_delete(Relation relation, ItemPointer tid, CommandId cid,
-    Snapshot crosscheck, bool wait, TM_FailureData *tmfd, bool allow_delete_self)
+    Snapshot crosscheck, bool wait, TM_FailureData *tmfd, bool allow_delete_self, TupleTableSlot** oldslot)
 {
     TM_Result result;
     TransactionId xid = GetCurrentTransactionId();
@@ -4744,6 +4744,16 @@ l1:
      * we don't PANIC upon a memory allocation failure.
      */
     old_key_tuple = ExtractReplicaIdentity(relation, &tp, true, &old_key_copied, &identity);
+
+    if (unlikely(oldslot != NULL)) {
+        TupleDesc tupDesc = RelationGetDescr(relation);
+        *oldslot = MakeSingleTupleTableSlot(tupDesc);
+        bool *nulls = (bool*)palloc0(sizeof(bool) * tupDesc->natts);
+        heap_deform_tuple(&tp, tupDesc, (*oldslot)->tts_values, nulls);
+        HeapTuple tuple = heap_form_tuple(tupDesc, (*oldslot)->tts_values, nulls);
+        pfree(nulls);
+        (*oldslot)->tts_tuple = (Tuple)tuple;
+    }
 
     /*
      * If this is the first possibly-multixact-able operation in the
@@ -5014,7 +5024,7 @@ void simple_heap_delete(Relation relation, ItemPointer tid, int options, bool al
  */
 TM_Result heap_update(Relation relation, Relation parentRelation, ItemPointer otid, HeapTuple newtup,
     CommandId cid, Snapshot crosscheck, bool wait, TM_FailureData *tmfd, LockTupleMode *lockmode,
-    bool allow_update_self)
+    bool allow_update_self, TupleTableSlot** oldslot)
 {
     TM_Result result;
     TransactionId xid = GetCurrentTransactionId();
@@ -5452,6 +5462,16 @@ l2:
     } else {
         /* check there is not space for an OID */
         Assert(!(newtup->t_data->t_infomask & HEAP_HASOID));
+    }
+
+    if (unlikely(oldslot != NULL)) {
+        TupleDesc tupDesc = RelationGetDescr(relation);
+        *oldslot = MakeSingleTupleTableSlot(tupDesc);
+        bool *nulls = (bool*)palloc0(sizeof(bool) * tupDesc->natts);
+        heap_deform_tuple(&oldtup, tupDesc, (*oldslot)->tts_values, nulls);
+        HeapTuple tuple = heap_form_tuple(tupDesc, (*oldslot)->tts_values, nulls);
+        pfree(nulls);
+        (*oldslot)->tts_tuple = (Tuple)tuple;
     }
 
     /*

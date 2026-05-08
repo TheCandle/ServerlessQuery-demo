@@ -19,6 +19,7 @@
 
 #include "access/datavec/hnsw.h"
 #include "access/datavec/ivfflat.h"
+#include "access/datavec/diskann.h"
 #include "access/gist_private.h"
 #include "access/hash.h"
 #include "access/nbtree.h"
@@ -127,7 +128,8 @@ static relopt_bool boolRelOpts[] = {
      false},
     {{"enable_lsg", "LSG feature switch", RELOPT_KIND_HNSW}, false},
     {{"deduplication", "Enables \"deduplication\" feature for btree index", RELOPT_KIND_BTREE}, false},
-    {{"enable_pq", "Whether to enable PQ", RELOPT_KIND_HNSW | RELOPT_KIND_IVFFLAT }, GENERIC_DEFAULT_ENABLE_PQ },
+    {{"enable_pq", "Whether to enable PQ", RELOPT_KIND_HNSW | RELOPT_KIND_IVFFLAT | RELOPT_KIND_DISKANN},
+     GENERIC_DEFAULT_ENABLE_PQ},
     {{"use_mmap", "Whether to enable use mmap during hnsw search", RELOPT_KIND_HNSW }, GENERIC_DEFAULT_USE_MMAP },
     {{"by_residual", "Whether to use residual during IVFPQ", RELOPT_KIND_IVFFLAT}, IVFPQ_DEFAULT_RESIDUAL},
     {{"enable_rabitq", "Whether to enable RabitQ", RELOPT_KIND_HNSW | RELOPT_KIND_IVFFLAT}, GENERIC_DEFAULT_ENABLE_RABITQ},
@@ -281,11 +283,12 @@ static relopt_int intRelOpts[] = {
      HNSW_DEFAULT_EF_CONSTRUCTION,
      HNSW_MIN_EF_CONSTRUCTION,
      HNSW_MAX_EF_CONSTRUCTION },
-    {{ "pq_m", "Number of PQ subquantizer", RELOPT_KIND_HNSW |RELOPT_KIND_IVFFLAT},
+    {{ "pq_m", "Number of PQ subquantizer", RELOPT_KIND_HNSW |RELOPT_KIND_IVFFLAT | RELOPT_KIND_DISKANN},
      GENERIC_DEFAULT_PQ_M,
      GENERIC_MIN_PQ_M,
      GENERIC_MAX_PQ_M },
-    {{ "pq_ksub", "Number of centroids for each PQ subquantizer", RELOPT_KIND_HNSW | RELOPT_KIND_IVFFLAT },
+    {{"pq_ksub", "Number of centroids for each PQ subquantizer",
+      RELOPT_KIND_HNSW | RELOPT_KIND_IVFFLAT },
      GENERIC_DEFAULT_PQ_KSUB,
      GENERIC_MIN_PQ_KSUB,
      GENERIC_MAX_PQ_KSUB },
@@ -298,6 +301,10 @@ static relopt_int intRelOpts[] = {
      IVFFLAT_MIN_LISTS,
      IVFFLAT_MAX_LISTS },
     /* list terminator */
+    {{ "index_size", "Number of candidate list size for diskann ", RELOPT_KIND_DISKANN },
+     DISKANN_DEFAULT_INDEX_SIZE,
+     DISKANN_MIN_INDEX_SIZE,
+     DISKANN_MAX_INDEX_SIZE},
     {{NULL}}
 };
 
@@ -1666,7 +1673,7 @@ void fillTdeRelOptions(List *options, char relkind)
 
     if (algo_flag && !spec_encrypt) {
         ereport(ERROR, (errmodule(MOD_SEC_TDE), errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-            errmsg("set relation option encrypt_algo failed"), 
+            errmsg("set relation option encrypt_algo failed"),
             errdetail("enable_tde option must be set when encrypt_algo is set")));
         return;
     }
@@ -1712,7 +1719,7 @@ void fillTdeRelOptions(List *options, char relkind)
             opt_algo->arg = reinterpret_cast<Node *>(makeString("AES_128_CTR"));
             options = lappend(options, opt_algo);
         }
-    } 
+    }
 }
 
 /*
@@ -2083,7 +2090,7 @@ bytea *default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
         { "end_ctid_internal", RELOPT_TYPE_STRING, offsetof(StdRdOptions, end_ctid_internal) },
         { "user_catalog_table", RELOPT_TYPE_BOOL, offsetof(StdRdOptions, user_catalog_table) },
         { "hashbucket", RELOPT_TYPE_BOOL, offsetof(StdRdOptions, hashbucket) },
-        { "segment", RELOPT_TYPE_BOOL, offsetof(StdRdOptions, segment) }, 
+        { "segment", RELOPT_TYPE_BOOL, offsetof(StdRdOptions, segment) },
         { "primarynode", RELOPT_TYPE_BOOL, offsetof(StdRdOptions, primarynode) },
         { "on_commit_delete_rows", RELOPT_TYPE_BOOL, offsetof(StdRdOptions, on_commit_delete_rows)},
         { "wait_clean_gpi", RELOPT_TYPE_STRING, offsetof(StdRdOptions, wait_clean_gpi)},
@@ -2127,7 +2134,7 @@ bytea *default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 
     rdopts = (StdRdOptions *)allocateReloptStruct(sizeof(StdRdOptions), options, numoptions);
 
-    fillRelOptions((void *)rdopts, sizeof(StdRdOptions), options, numoptions, 
+    fillRelOptions((void *)rdopts, sizeof(StdRdOptions), options, numoptions,
         validate, tab, lengthof(tab));
 
     for (int i = 0; i < numoptions; i++) {
@@ -2420,16 +2427,16 @@ static void ValidateStrOptPartitionInterval(const char *val)
     int64 usec = 0;
     if (result == NULL) {
         ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE), 
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("Invalid interval string for  \"partition_interval\" option"),
                  errdetail("Valid period string are like \"30 minute\", \"1 hour\", \"2 day\".")));
     }
     usec = INTERVAL_TO_USEC(result);
-    if (result->month < 0 || result->day < 0 || usec < 30 * USECS_PER_MINUTE 
+    if (result->month < 0 || result->day < 0 || usec < 30 * USECS_PER_MINUTE
         || usec > 1 * DAYS_PER_NYEAR * USECS_PER_DAY ||
         (result->month == MONTHS_PER_YEAR && (result->day > 0 || result->time > 0))) {
         ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE), 
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("Invalid interval range for  \"partition_interval\" option"),
                  errdetail("Valid interval range from \"30 minute\" to \"1 year\".")));
     }
@@ -2446,7 +2453,7 @@ static void ValidateStrOptTimeColumn(const char *val)
 {
     if (val == NULL) {
         ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE), 
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("Invalid interval string for  \"time_column\" option"),
                  errdetail("Valid time_column string in contview.")));
     }
@@ -2463,7 +2470,7 @@ static void ValidateStrOptTTLInterval(const char *val)
 {
     if (val == NULL) {
         ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE), 
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("Invalid interval string for  \"ttl_interval\" option"),
                  errdetail("Valid ttl_interval string in contview.")));
     }
@@ -2480,7 +2487,7 @@ static void ValidateStrOptGatherInterval(const char *val)
 {
     if (val == NULL) {
         ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE), 
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                  errmsg("Invalid interval string for  \"gather_interval\" option"),
                  errdetail("Valid gather_interval string in contview.")));
     }
@@ -3002,7 +3009,7 @@ bytea *tsearch_config_reloptions(Datum tsoptions, bool validate, Oid prsoid, boo
     return (bytea *)cfopts;
 }
 
-/* remove an option from options list. If succeeded, set removed = true */ 
+/* remove an option from options list. If succeeded, set removed = true */
 List* RemoveRelOption(List* options, const char* optName, bool* removed)
 {
     ListCell* lcell = NULL;
@@ -3030,7 +3037,7 @@ List* RemoveRelOption(List* options, const char* optName, bool* removed)
 
 /*
  * determine the final crossbucket option value based on the combination of various factors:
- * 
+ *
  * default_index_kind (kind): { 0, 1, 2 }, represented by 2 bits
  *     0: denotes turning off multiple nodes GPI feature
  *     1: denotes creating local index by default
@@ -3042,9 +3049,9 @@ List* RemoveRelOption(List* options, const char* optName, bool* removed)
  * stmtoptgpi (gpi): { 0, 1 }, represented by 1 bit
  *     0: denotes stmt->isGlobal is false
  *     1: denotes stmt->isGlobal is true
- * 
+ *
  * combine above three items from high to low to one 5 bits value:
- * 
+ *
  *     kind cbi gpi  bits  res
  *     00   00  0  = 0x0   0
  *     00   00  1  = 0x1  -1
@@ -3064,7 +3071,7 @@ List* RemoveRelOption(List* options, const char* optName, bool* removed)
  *     10   01  1  = 0x13 -1
  *     10   10  0  = 0x14  1
  *     10   10  1  = 0x15  1
- * 
+ *
  * return values:
  *    -1: invalid combination
  *     0: the determined crossbucket option is false
@@ -3140,7 +3147,7 @@ bool get_crossbucket_option(List **options_ptr, bool stmtoptgpi, char *accessmet
             /* skip non-btree index and return false */
             return false;
         } else {
-            /* 
+            /*
              * The above logic determined crossbucket option should be true, but the
              * statement didn't contain it, so append it here to make it persistent.
              */

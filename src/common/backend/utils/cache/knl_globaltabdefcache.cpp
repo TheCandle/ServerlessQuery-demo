@@ -63,6 +63,8 @@ static void RelationPointerToNULL(Relation rel)
     rel->rd_exclstrats = NULL;
     rel->rd_amcache = NULL;
     rel->rd_indcollation = NULL;
+    rel->pqTable = NULL;
+    rel->pqDistanceTable = NULL;
     rel->rd_fdwroutine = NULL;
     rel->rd_bucketkey = NULL;
     rel->partMap = NULL;
@@ -70,6 +72,9 @@ static void RelationPointerToNULL(Relation rel)
     rel->rd_locator_info = NULL;
     rel->sliceMap = NULL;
     rel->parent = NULL;
+    rel->diskPQTableTransposed = NULL;
+    rel->centroids = NULL;
+    rel->offsets = NULL;
     /* double linked list node, partition and bucket relation would be stored in fakerels list of resource owner */
     rel->node.prev = NULL;
     rel->node.next = NULL;
@@ -433,7 +438,7 @@ Relation CopyRelationData(Relation newrel, Relation rel, MemoryContext rules_cxt
      * otherwise, do the copy work here
      * if the variable changed, there is no lock and no rel inval msg,
      * set it zero and reinit it when copy into local */
-#define RD_SIZE 576
+#define RD_SIZE 600
     Assert(sizeof(RelationData) == RD_SIZE);
     /* all copied exclude pointer */
     *newrel = *rel;

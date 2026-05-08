@@ -47,6 +47,278 @@ enum RefineType {
     NotRefine
 };
 
+inline bool operator==(const ItemPointerData& lhs, const ItemPointerData& rhs) {
+    return (lhs.ip_blkid.bi_hi == rhs.ip_blkid.bi_hi) && (lhs.ip_blkid.bi_lo == rhs.ip_blkid.bi_lo) && (lhs.ip_posid == rhs.ip_posid);
+}
+
+template <typename T>
+class VectorList {
+public:
+    typedef T* iterator;
+
+public:
+    VectorList()
+    {
+        this->p = (T*)palloc0(baseCapacity * sizeof(T));
+        this->myCapacity = baseCapacity;
+        this->mySize = 0;
+    }
+
+    void initialize_vector()
+    {
+        this->p = (T*)palloc0(baseCapacity * sizeof(T));
+        this->myCapacity = baseCapacity;
+        this->mySize = 0;
+        return;
+    }
+
+    VectorList(uint32_t mySize)
+    {
+        this->myCapacity = baseCapacity + mySize;
+        this->mySize = mySize;
+        this->p = (T*)palloc0(myCapacity * sizeof(T));
+    }
+
+    /* caller needs to call clear() to free memory */
+    ~VectorList()
+    {}
+
+    VectorList(const VectorList& v)
+    {
+        this->myCapacity = v.myCapacity;
+        this->mySize = v.mySize;
+        this->p = (T*)palloc0(this->myCapacity * sizeof(T));
+        for (size_t i = 0; i < this->mySize; i++) {
+            this->p[i] = v[i];
+        }
+    }
+
+    VectorList(VectorList&& v)
+    {
+        this->myCapacity = v.myCapacity;
+        this->mySize = v.mySize;
+        this->p = v.p;
+        v.p = nullptr;
+        v.mySize = 0;
+        v.myCapacity = 0;
+    }
+
+    void push_back(const T& data)
+    {
+        if (this->mySize == this->myCapacity) {
+            this->p = (T*)repalloc(this->p, (this->myCapacity * capacityExpansionMultiplier) * sizeof(T));
+            this->myCapacity *= capacityExpansionMultiplier;
+        }
+        errno_t rc = memcpy_s(this->p + this->mySize, sizeof(T), &data, sizeof(T));
+        securec_check(rc, "", "");
+        this->mySize++;
+    }
+
+    void reserve(size_t new_cap)
+    {
+        if (new_cap <= this->myCapacity) {
+            return;
+        }
+        this->p = (T*)repalloc(this->p, new_cap * sizeof(T));
+        this->myCapacity = new_cap;
+    }
+
+    void resize(size_t new_size)
+    {
+        while (this->mySize > new_size) {
+            pop();
+        }
+        while (this->mySize < new_size) {
+            push_back(T());
+        }
+    }
+
+    void removeIndex(size_t i)
+    {
+        size_t tail_size = (size_t)(this->mySize - i - 1);
+        if (tail_size > 0) {
+            errno_t rc = memmove_s(this->p + i, sizeof(T) * tail_size, this->p + i + 1, sizeof(T) * tail_size);
+            securec_check(rc, "", "");
+        }
+        this->mySize--;
+    }
+
+    void pop_back()
+    {
+        if (this->mySize > 1) {
+            this->mySize--;
+        }
+    }
+
+    void pop()
+    {
+        this->mySize--;
+    }
+
+    T& back()
+    {
+        return *(end() - 1);
+    }
+
+    const T& back() const
+    {
+        return this->p[this->size() - 1];
+    }
+
+    void clear()
+    {
+        this->myCapacity = 0;
+        this->mySize = 0;
+        pfree_ext(this->p);
+
+        p = nullptr;
+    }
+
+    void reset()
+    {
+        this->mySize = 0;
+    }
+
+    bool empty()
+    {
+        return this->mySize == 0;
+    }
+
+    void insert(iterator pos, T data)
+    {
+        int32_t istPos = pos - this->begin();
+        if (pos >= this->begin() && pos <= this->end()) {
+            if (this->mySize == this->myCapacity) {
+                T* new_p = (T*)palloc0((this->myCapacity + capacityExpansionIncrement) * sizeof(T));
+                for (size_t i = 0; i < mySize; i++) {
+                    new_p[i] = this->p[i];
+                }
+                this->myCapacity += capacityExpansionIncrement;
+
+                pfree(this->p);
+
+                this->p = new_p;
+            }
+
+            int32_t curPos = 0;
+            for (curPos = mySize; curPos > istPos; curPos--) {
+                this->p[curPos] = this->p[curPos - 1];
+            }
+
+            this->p[curPos] = data;
+            this->mySize++;
+        }
+    }
+
+    const T& operator[](uint32_t index) const
+    {
+        return this->p[index];
+    }
+
+    const T& operator[](size_t index) const
+    {
+        return this->p[index];
+    }
+
+    const T& operator[](int index) const
+    {
+        return this->p[index];
+    }
+
+    T& operator[](uint32_t index)
+    {
+        return this->p[index];
+    }
+
+    T& operator[](size_t index)
+    {
+        return this->p[index];
+    }
+
+    T& operator[](int index)
+    {
+        return this->p[index];
+    }
+
+    VectorList& operator=(const VectorList& v)
+    {
+        this->myCapacity = v.myCapacity;
+        this->mySize = v.mySize;
+        if (this->p != NULL) {
+            pfree(this->p);
+        }
+        this->p = (T*)palloc0(this->myCapacity * sizeof(T));
+        for (size_t i = 0; i < this->mySize; i++) {
+            this->p[i] = v[i];
+        }
+        return *this;
+    }
+
+    VectorList& operator=(VectorList&& v)
+    {
+        this->myCapacity = v.myCapacity;
+        this->mySize = v.mySize;
+        this->p = v.p;
+        v.p = nullptr;
+        v.mySize = 0;
+        v.myCapacity = 0;
+        return *this;
+    }
+
+    size_t find(const T& x) const
+    {
+        for (size_t i = 0; i < this->mySize; i++) {
+            if (this->p[i] == x) {
+                return i;
+            }
+        }
+        return (size_t)-1;
+    }
+
+    bool contains(const T& x) const
+    {
+        for (size_t i = 0; i < this->mySize; i++) {
+            if (this->p[i] == x) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    size_t size() const
+    {
+        return this->mySize;
+    }
+
+    iterator end()
+    {
+        return this->p + this->size();
+    }
+
+    const iterator end() const
+    {
+        return this->p + this->size();
+    }
+
+    iterator begin()
+    {
+        return this->p;
+    }
+
+    const iterator begin() const
+    {
+        return this->p;
+    }
+
+public:
+    T* p{nullptr};
+    uint32_t myCapacity{0};
+    uint32_t mySize{0};
+    static const uint32_t baseCapacity = 16U;
+    static const uint32_t capacityExpansionIncrement = 256U;
+    static const uint32_t capacityExpansionMultiplier = 2;
+};
+
 typedef struct VectorArrayData {
     int length;
     int maxlen;
@@ -70,6 +342,18 @@ typedef struct PQParams {
     size_t subItemSize;
     char *pqTable;
 } PQParams;
+
+/* DiskAnn PQ Params */
+
+typedef struct DiskPQParams {
+    int pqChunks = 512;
+    int funcType = 0;
+    int dim = 4096;
+    char *pqTable = nullptr;
+    uint32_t *offsets = nullptr;
+    char *tablesTransposed = nullptr;
+    char *centroids = nullptr;
+} DiskPQParams;
 
 /* Sampling context structure */
 typedef struct {
@@ -107,6 +391,16 @@ typedef struct st_pq_func {
 } pq_func_t;
 extern pq_func_t g_pq_func;
 
+typedef struct st_diskann_pq_func {
+    bool inited;
+    void *handle;
+    int (*ComputePQTable)(VectorArray samples, DiskPQParams *params);
+    int (*ComputeVectorPQCode)(VectorArray baseData, const DiskPQParams *params, uint8_t *pqCode);
+    int (*GetPQDistanceTable)(char *vec, const DiskPQParams *params, float *pqDistanceTable);
+    int (*GetPQDistance)(const uint8_t *basecode, const DiskPQParams *params,
+                         const float *pqDistanceTable, float &pqDistance);
+} diskann_pq_func_t;
+extern diskann_pq_func_t g_diskann_pq_func;
 static inline Pointer VectorArrayGet(VectorArray arr, int offset)
 {
     return ((char *) arr->items) + (offset * arr->itemsize);
@@ -137,6 +431,8 @@ int PQInit();
 void PQUinit();
 LsgDistType GetLsgfunctionType(FmgrInfo *procinfo, FmgrInfo *normprocinfo);
 bool CanUseMmap(Relation index);
+int DiskAnnPQInit();
+void DiskAnnPQUinit();
 
 typedef struct MmapShmemVal {
     BlockNumber blockNum;

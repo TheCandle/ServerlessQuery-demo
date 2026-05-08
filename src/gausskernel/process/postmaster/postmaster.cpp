@@ -3150,12 +3150,19 @@ int PostmasterMain(int argc, char* argv[])
     }
 
     /* init datavec pq */
+    int ret = 0;
     if (g_instance.attr.attr_storage.enable_pq) {
-        int ret = PQInit();
+        ret = PQInit();
         if (ret != 0) {
             ereport(PANIC, (errmsg("datavec PQ init failed, ret: %d", ret)));
         }
         ereport(LOG, (errmsg("datavec PQ init success.")));
+    }
+    ret = DiskAnnPQInit();
+    if (ret != 0) {
+        ereport(WARNING, (errmsg("datavec diskann PQ init failed, ret: %d", ret)));
+    } else {
+        ereport(LOG, (errmsg("datavec diskann PQ init success.")));
     }
 
     /* init sharestorge(dorado) */
@@ -9796,6 +9803,7 @@ void ExitPostmaster(int status)
      */
     DMSUninit();
     PQUinit();
+    DiskAnnPQUinit();
 
     CloseGaussPidDir();
 

@@ -2931,6 +2931,9 @@ void RelationInitIndexAccessInfo(Relation relation, HeapTuple index_tuple)
     }
     relation->pqTable = NULL;
     relation->pqDistanceTable = NULL;
+    relation->diskPQTableTransposed = NULL;
+    relation->centroids = NULL;
+    relation->offsets = NULL;
 }
 
 /*
