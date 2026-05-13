@@ -1,29 +1,20 @@
-DECLARE
-cnt int;
-BEGIN
-select count(*) into cnt from pg_am where amname = 'diskann';
-if cnt = 1 then
-        DROP OPERATOR FAMILY IF EXISTS pg_catalog.vector_l2_ops USING diskann CASCADE;
-        DROP OPERATOR CLASS IF EXISTS pg_catalog.vector_l2_ops USING diskann CASCADE;
-        DROP OPERATOR FAMILY IF EXISTS pg_catalog.vector_ip_ops USING diskann CASCADE;
-        DROP OPERATOR CLASS IF EXISTS pg_catalog.vector_ip_ops USING diskann CASCADE;
-        DROP OPERATOR FAMILY IF EXISTS pg_catalog.vector_cosine_ops USING diskann CASCADE;
-        DROP OPERATOR CLASS IF EXISTS pg_catalog.vector_cosine_ops USING diskann CASCADE;
-end if;
-END;
+DROP FUNCTION IF EXISTS pg_catalog.query_node_reform_info() CASCADE;
 
-DROP ACCESS METHOD IF EXISTS diskann CASCADE;
-
-DROP FUNCTION IF EXISTS pg_catalog.diskannbuild(internal, internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannbuildempty(internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskanninsert(internal, internal, internal, internal, internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannbulkdelete(internal, internal, internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannvacuumcleanup(internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskanncostestimate(internal, internal, internal, internal, internal, internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannoptions(internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannvalidate(internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannbeginscan(internal, internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannrescan(internal, internal, internal, internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskanngettuple(internal, internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannendscan(internal) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.diskannhandler(internal) CASCADE;
+SET LOCAL inplace_upgrade_next_system_object_oids=IUO_PROC, 2867;
+CREATE OR REPLACE FUNCTION pg_catalog.query_node_reform_info
+(
+    OUT reform_node_id          integer, 
+    OUT reform_type             text, 
+    OUT reform_start_time       text, 
+    OUT reform_end_time         text, 
+    OUT is_reform_success       boolean, 
+    OUT redo_start_time         text, 
+    OUT redo_end_time           text, 
+    OUT xlog_total_bytes        int8,
+    OUT hashmap_construct_time  text, 
+    OUT action                  text
+)
+ RETURNS SETOF record
+ LANGUAGE internal
+ STRICT NOT FENCED NOT SHIPPABLE ROWS 64
+AS $function$query_node_reform_info$function$;
