@@ -33,7 +33,15 @@
 #define SPARSE_L1_FUNC_OID 8467
 #define BIT_JACCARD_FUNC_OID 8468
 #define BIT_HAMMING_FUNC_OID 8469
+
+/* Chunk storage size based on page size */
+/* For 4K pages (BLCKSZ=4096), use 3K chunks; for 8K pages (BLCKSZ=8192), use 6K chunks */
+#ifdef ENABLE_BLCKSZ_4K
+#define CHUNK_STORAGE_SIZE (uint16)(3 * 1024)
+#else
 #define CHUNK_STORAGE_SIZE (uint16)(6 * 1024)
+#endif
+
 #define LSGSAMPLE_STORAGE_SIZE (uint16)(6 * 1024)
 #define DEFAULT_TARGET_ROWS 300
 #define TUPLE_NUM 100
