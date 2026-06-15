@@ -2410,7 +2410,12 @@ int FileAsyncWrite(AioDispatchDesc_t** dList, int32 dn, bool inter_xact)
 {
     int returnCode = 0;
     vfd *vfdcache = GetVfdCache(inter_xact);
+
+    int validCount = 0;
     for (int i = 0; i < dn; i++) {
+        if (dList[i] == NULL) {
+            continue;
+        }
         File file = dList[i]->aiocb.aio_fildes;
 
         Assert(FileIsValid(file, inter_xact));
@@ -2421,20 +2426,28 @@ int FileAsyncWrite(AioDispatchDesc_t** dList, int32 dn, bool inter_xact)
                               (int64)vfdcache[file].seekPos))));
 
         if ((returnCode = FileAccess(file, inter_xact)) < 0) {
-            // aio debug error
             ereport(ERROR, (errcode_for_file_access(), errmsg("FileAsyncWrite, file access failed %d", returnCode)));
             return returnCode;
         }
 
         /* replace the virtual fd with the real one */
         dList[i]->aiocb.aio_fildes = vfdcache[file].fd;
+
+        if (validCount != i) {
+            dList[validCount] = dList[i];
+        }
+        validCount++;
+    }
+
+    if (validCount == 0) {
+        return 0;
     }
 
     io_context_t aio_context = CompltrContext(dList[0]->blockDesc.reqType, 0);
 
-    returnCode = FileAsyncSubmitIO<AioDispatchDesc_t**>(aio_context, dList, dn);
-    if (returnCode != dn) {
-        ereport(PANIC, (errmsg("io_submit() async write failed %d, dispatch count(%d)", returnCode, dn)));
+    returnCode = FileAsyncSubmitIO<AioDispatchDesc_t**>(aio_context, dList, validCount);
+    if (returnCode != validCount) {
+        ereport(PANIC, (errmsg("io_submit() async write failed %d, dispatch count(%d)", returnCode, validCount)));
     }
 
     return returnCode;

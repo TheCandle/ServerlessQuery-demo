@@ -865,7 +865,11 @@ static void InitStorageConfigureNamesBool()
             NULL},
 
         {{"enable_adio_function",
+#ifdef ENABLE_LITE_MODE
             PGC_INTERNAL,
+#else
+            PGC_POSTMASTER,
+#endif
             NODE_ALL,
             DEVELOPER_OPTIONS,
             gettext_noop("Enable adio function."),
@@ -3275,14 +3279,14 @@ static void InitStorageConfigureNamesInt()
             NULL,
             NULL,
             NULL},
-        {{"prefetch_quantity",
+        {{"adio_prefetch_quantity",
             PGC_USERSET,
             NODE_ALL,
             RESOURCES_MEM,
             gettext_noop("Sets the IO quantity of prefetch buffers used by async dirct IO interface."),
             NULL,
             GUC_UNIT_BLOCKS},
-            &u_sess->attr.attr_storage.prefetch_quantity,
+            &u_sess->attr.attr_storage.adioPrefetchQuantity,
             4096,
             128,
             131072,
@@ -4214,6 +4218,47 @@ static void InitStorageConfigureNamesInt()
             NULL,
             NULL,
             NULL},
+#ifndef ENABLE_LITE_MODE
+        {{"adio_buffer_align_size",
+            PGC_POSTMASTER,
+            NODE_ALL,
+            DEVELOPER_OPTIONS,
+            gettext_noop("Buffer aligned size for adio, should set to the page size of file system."),
+            NULL},
+            &g_instance.attr.attr_storage.adioBufferAlignSize,
+            BLCKSZ,
+            512,
+            BLCKSZ,
+            NULL,
+            NULL,
+            NULL},
+        {{"adio_reader_thread_num",
+            PGC_POSTMASTER,
+            NODE_ALL,
+            DEVELOPER_OPTIONS,
+            gettext_noop("Number of reader threads for async direct IO."),
+            NULL},
+            &g_instance.attr.attr_storage.adioReaderThreadNum,
+            2,
+            1,
+            10,
+            NULL,
+            NULL,
+            NULL},
+        {{"adio_writer_thread_num",
+            PGC_POSTMASTER,
+            NODE_ALL,
+            DEVELOPER_OPTIONS,
+            gettext_noop("Number of writer threads for async direct IO."),
+            NULL},
+            &g_instance.attr.attr_storage.adioWriterThreadNum,
+            2,
+            1,
+            10,
+            NULL,
+            NULL,
+            NULL},
+#endif
         /* End-of-list marker */
         {{NULL,
             (GucContext)0,
@@ -5677,10 +5722,12 @@ static bool check_adio_debug_guc(bool* newval, void** extra, GucSource source)
 
 static bool check_adio_function_guc(bool* newval, void** extra, GucSource source)
 {
+#ifdef ENABLE_LITE_MODE
     /* This value is always false no matter how the user sets it.  */
     if (*newval == true) {
         *newval = false;
     }
+#endif
 
     return true;
 }

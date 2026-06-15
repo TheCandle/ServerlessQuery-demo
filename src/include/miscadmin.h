@@ -640,7 +640,6 @@ typedef enum {
     CBMWriterProcess,
     RemoteServiceProcess,
 #endif
-    AsyncIOCompleterProcess,
     TpoolSchdulerProcess,
     UndoRecyclerProcess,
     TsCompactionProcess,
@@ -663,6 +662,9 @@ typedef enum {
     CsnMinSyncProcess,
     ParallelDecodeProcess,
     LogicalReadRecord,
+#ifndef ENABLE_LITE_MODE
+    AsyncIOCompleterProcess,
+#endif
 
     NUM_AUXPROCTYPES /* Must be last! */
 } AuxProcType;
