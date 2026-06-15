@@ -1064,7 +1064,7 @@ void rewrite_page_list_write(RewriteState state)
         aioDescp->blockDesc.blockNum = start + i;
         aioDescp->blockDesc.buffer = (char *)(buf_list + i * BLCKSZ);
         aioDescp->blockDesc.blockSize = BLCKSZ;
-        aioDescp->blockDesc.reqType = PageListBackWriteType;
+        aioDescp->blockDesc.reqType = PAGE_LIST_BACK_WRITE_TYPE;
         aioDescp->blockDesc.bufHdr = bufHdr;
         aioDescp->blockDesc.descType = AioVacummFull;
 

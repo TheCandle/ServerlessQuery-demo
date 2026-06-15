@@ -40,10 +40,10 @@ typedef enum : uint8_t {
     FLUSH_TYPE,
     NUM_AIOCOMPLTR_TYPES,
     /* backward compat aliases for cstore code */
-    PageListPrefetchType = PREFETCH_TYPE,
-    PageListBackWriteType = FLUSH_TYPE,
-    CUListPrefetchType = PREFETCH_TYPE,
-    CUListWriteType = FLUSH_TYPE,
+    PAGE_LIST_PREFETCH_TYPE = PREFETCH_TYPE,
+    PAGE_LIST_BACK_WRITE_TYPE = FLUSH_TYPE,
+    CU_LIST_PREFETCH_TYPE = PREFETCH_TYPE,
+    CU_LIST_WRITE_TYPE = FLUSH_TYPE,
 } AioCompltrType;
 
 /*

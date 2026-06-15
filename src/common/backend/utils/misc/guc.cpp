@@ -5386,12 +5386,24 @@ static int guc_var_compare(const void* a, const void* b)
     const struct config_generic* confa = *(struct config_generic* const*)a;
     const struct config_generic* confb = *(struct config_generic* const*)b;
 
-    if (confa == NULL && confb == NULL) return 0;
-    if (confa == NULL) return -1;
-    if (confb == NULL) return 1;
-    if (confa->name == NULL && confb->name == NULL) return 0;
-    if (confa->name == NULL) return -1;
-    if (confb->name == NULL) return 1;
+    if (confa == NULL && confb == NULL) {
+        return 0;
+    }
+    if (confa == NULL) {
+        return -1;
+    }
+    if (confb == NULL) {
+        return 1;
+    }
+    if (confa->name == NULL && confb->name == NULL) {
+        return 0;
+    }
+    if (confa->name == NULL) {
+        return -1;
+    }
+    if (confb->name == NULL) {
+        return 1;
+    }
 
     return guc_name_compare(confa->name, confb->name);
 }
@@ -5401,9 +5413,15 @@ static int guc_var_compare(const void* a, const void* b)
  */
 static int guc_name_compare(const char* namea, const char* nameb)
 {
-    if (namea == NULL && nameb == NULL) return 0;
-    if (namea == NULL) return -1;
-    if (nameb == NULL) return 1;
+    if (namea == NULL && nameb == NULL) {
+        return 0;
+    }
+    if (namea == NULL) {
+        return -1;
+    }
+    if (nameb == NULL) {
+        return 1;
+    }
     /*
      * The temptation to use strcasecmp() here must be resisted, because the
      * array ordering has to remain stable across setlocale() calls. So, build
@@ -9443,8 +9461,14 @@ void ExecSetVariableStmt(VariableSetStmt* stmt, ParamListInfo paramInfo)
                     }
                 }
 
-                /* passwd is sensitive info, it should be cleaned when it's useless */
-                str_reset(passwd);
+                /* passwd is sensitive info, clear it with memset_s when it's useless */
+                if (passwd != NULL) {
+                    size_t passwdLen = strlen(passwd);
+                    if (passwdLen > 0) {
+                        errno_t passwdRc = memset_s(passwd, passwdLen, 0, passwdLen);
+                        securec_check(passwdRc, "\0", "\0");
+                    }
+                }
             }
 
             (void)set_config_option(stmt->name, role,
@@ -10614,10 +10638,11 @@ static char* _ShowOption(struct config_generic* record, bool use_units, bool is_
 
             if (conf->variable == NULL) {
                 val = "off";
-            } else if (conf->show_hook && is_show)
+            } else if (conf->show_hook && is_show) {
                 val = (*conf->show_hook)();
-            else
+            } else {
                 val = *conf->variable ? "on" : "off";
+            }
         } break;
 
         case PGC_INT: {
@@ -10625,9 +10650,9 @@ static char* _ShowOption(struct config_generic* record, bool use_units, bool is_
 
             if (conf->variable == NULL) {
                 val = "0";
-            } else if (conf->show_hook && is_show)
+            } else if (conf->show_hook && is_show) {
                 val = (*conf->show_hook)();
-            else {
+            } else {
                 /*
                  * Use int64 arithmetic to avoid overflows in units
                  * conversion.
@@ -10706,9 +10731,9 @@ static char* _ShowOption(struct config_generic* record, bool use_units, bool is_
 
             if (conf->variable == NULL) {
                 val = "0";
-            } else if (conf->show_hook  && is_show)
+            } else if (conf->show_hook  && is_show) {
                 val = (*conf->show_hook)();
-            else {
+            } else {
                 rc = snprintf_s(buffer, sizeof(buffer), sizeof(buffer) - 1, INT64_FORMAT, *conf->variable);
                 securec_check_ss(rc, "\0", "\0");
                 val = buffer;
@@ -10813,10 +10838,11 @@ static char* _ShowOption(struct config_generic* record, bool use_units, bool is_
 
             if (conf->variable == NULL) {
                 val = "???";
-            } else if (conf->show_hook && is_show)
+            } else if (conf->show_hook && is_show) {
                 val = (*conf->show_hook)();
-            else
+            } else {
                 val = config_enum_lookup_by_value(conf, *conf->variable);
+            }
         } break;
 
         default:

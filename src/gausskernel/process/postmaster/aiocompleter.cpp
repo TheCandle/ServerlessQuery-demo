@@ -124,6 +124,11 @@ int AioCompltrNum()
 
 #define RETRY_TIMES (5)
 
+/* AioCmpltrStart() failure stage codes reported via AioCompltrStartError() */
+#define AIO_COMPLTR_ERR_THREAD_LIMIT (1)
+#define AIO_COMPLTR_ERR_EVENT_MALLOC (2)
+#define AIO_COMPLTR_ERR_FORK (3)
+
 void AioCompltrStartError(int error)
 {
     AioCompltrStop(SIGTERM);
@@ -153,7 +158,7 @@ void AioCmpltrStart(void)
     int compltrTypeNum = sizeof(compltrDescArray) / sizeof(AioCompltrDescT);
 
     if (compltrNum > MAX_AIOCOMPLTR_THREADS) {
-        AioCompltrStartError(1);
+        AioCompltrStartError(AIO_COMPLTR_ERR_THREAD_LIMIT);
     }
 
     error = memset_s(&compltrArray, sizeof(AioCompltrThreadT) * MAX_AIOCOMPLTR_THREADS,
@@ -177,14 +182,14 @@ void AioCmpltrStart(void)
             if (compltrArray[compltrIdx].eventsp == (struct io_event*)NULL) {
                 ereport(WARNING,
                     (errmsg("AIO Startup malloc io_event failed: maxNr(%d), error(%d)",
-                        compltrArray[compltrIdx].compltrDescp->maxNr, 2)));
-                AioCompltrStartError(2);
+                        compltrArray[compltrIdx].compltrDescp->maxNr, AIO_COMPLTR_ERR_EVENT_MALLOC)));
+                AioCompltrStartError(AIO_COMPLTR_ERR_EVENT_MALLOC);
             }
 
             compltrArray[compltrIdx].tid = Compltrfork_exec(compltrIdx);
             if (compltrArray[compltrIdx].tid == ((ThreadId)0)) {
-                ereport(WARNING, (errmsg("Start AIO Completer thread failed: error(%d)", 3)));
-                AioCompltrStartError(3);
+                ereport(WARNING, (errmsg("Start AIO Completer thread failed: error(%d)", AIO_COMPLTR_ERR_FORK)));
+                AioCompltrStartError(AIO_COMPLTR_ERR_FORK);
             }
         };
     }
@@ -287,7 +292,6 @@ void AioCompltrMain(int compltrIdx)
         }
 
         eventsReceived = io_getevents(context, compltrDescp->minNr, compltrDescp->maxNr, eventsp, &timeout);
-
         if (eventsReceived == -EINTR) {
             continue;
         }
@@ -314,6 +318,15 @@ static void CompltrQuickDie(SIGNAL_ARGS)
 {
     gs_signal_setmask(&t_thrd.libpq_cxt.BlockSig, NULL);
     on_exit_reset();
+
+    /*
+     * Note we do exit(2) not exit(0).  This is to force the postmaster into a
+     * system reset cycle if some idiot DBA sends a manual SIGQUIT to a random
+     * backend.  This is necessary precisely because we don't clean up our
+     * shared memory state.  (The "dead man switch" mechanism in pmsignal.c
+     * should ensure the postmaster sees this as a crash, too, but no harm in
+     * being doubly sure.)
+     */
     exit(2);
 }
 

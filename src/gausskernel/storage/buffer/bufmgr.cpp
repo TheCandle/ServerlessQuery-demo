@@ -993,7 +993,7 @@ void PageListPrefetch(Relation reln, ForkNumber fork_num, BlockNumber *block_lis
         aio_desc->blockDesc.blockNum = buf_desc->tag.blockNum;
         aio_desc->blockDesc.buffer = buf_block;
         aio_desc->blockDesc.blockSize = BLCKSZ;
-        aio_desc->blockDesc.reqType = PageListPrefetchType;
+        aio_desc->blockDesc.reqType = PAGE_LIST_PREFETCH_TYPE;
         aio_desc->blockDesc.bufHdr = (BufferDesc *)buf_desc;
         aio_desc->blockDesc.descType = AioRead;
 
@@ -1436,7 +1436,7 @@ void PageListBackWrite(uint32 *buf_list, int32 nbufs, uint32 flags = 0, SMgrRela
             aioDescp->blockDesc.blockNum = bufHdr->tag.blockNum;
             aioDescp->blockDesc.buffer = (char *)BufHdrGetBlock(bufHdr);
             aioDescp->blockDesc.blockSize = BLCKSZ;
-            aioDescp->blockDesc.reqType = PageListBackWriteType;
+            aioDescp->blockDesc.reqType = PAGE_LIST_BACK_WRITE_TYPE;
             aioDescp->blockDesc.bufHdr = bufHdr;
             aioDescp->blockDesc.descType = AioWrite;
 
@@ -5363,6 +5363,36 @@ void FlushBuffer(void *buf, SMgrRelation reln, ReadBufferMethod flushmethod, boo
     }
 }
 
+static void AdioDispatchBufferWrite(SMgrRelation reln, RedoBufferInfo *bufferinfo,
+    char *bufToWrite, BufferDesc *bufdesc)
+{
+    AioDispatchDesc_t *aioDescp = (AioDispatchDesc_t *)adio_share_alloc(sizeof(AioDispatchDesc_t));
+    int ret = memset_s(&(aioDescp->aiocb), sizeof(aioDescp->aiocb), 0, sizeof(aioDescp->aiocb));
+    securec_check(ret, "\0", "\0");
+
+    aioDescp->blockDesc.smgrReln = reln;
+    aioDescp->blockDesc.forkNum = bufferinfo->blockinfo.forknum;
+    aioDescp->blockDesc.blockNum = bufferinfo->blockinfo.blkno;
+    aioDescp->blockDesc.buffer = bufToWrite;
+    aioDescp->blockDesc.blockSize = BLCKSZ;
+    aioDescp->blockDesc.reqType = PAGE_LIST_BACK_WRITE_TYPE;
+    aioDescp->blockDesc.bufHdr = bufdesc;
+    aioDescp->blockDesc.descType = AioWrite;
+    aioDescp->blockDesc.lockThreadMask = LOCK_REFCOUNT_ONE_BY_THREADID;
+
+    auto list = t_thrd.storage_cxt.InProgressAioDispatch;
+    int idx = t_thrd.storage_cxt.InProgressAioDispatchCount;
+    list[idx] = aioDescp;
+    t_thrd.storage_cxt.inProgressAioDescs[idx] = bufdesc;
+
+    smgrasyncwrite(reln, bufferinfo->blockinfo.forknum, list + idx, 1);
+
+    if (list[idx] == NULL) {
+        t_thrd.storage_cxt.inProgressAioDescs[idx] = NULL;
+    }
+    t_thrd.storage_cxt.InProgressAioDispatchCount++;
+}
+
 void AdioFlushBuffer(BufferDesc *buf, SMgrRelation reln, ReadBufferMethod flushmethod)
 {
     Block bufBlock;
@@ -5407,31 +5437,7 @@ void AdioFlushBuffer(BufferDesc *buf, SMgrRelation reln, ReadBufferMethod flushm
     bufToWrite = AdioPageSetChecksumCopy((Page)bufToWrite, bufferinfo.blockinfo.blkno);
 
     Assert(!IsSegmentFileNode(bufdesc->tag.rnode));
-    AioDispatchDesc_t *aioDescp = (AioDispatchDesc_t *)adio_share_alloc(sizeof(AioDispatchDesc_t));
-    int ret = memset_s(&(aioDescp->aiocb), sizeof(aioDescp->aiocb), 0, sizeof(aioDescp->aiocb));
-    securec_check(ret, "", "");
-
-    aioDescp->blockDesc.smgrReln = reln;
-    aioDescp->blockDesc.forkNum = bufferinfo.blockinfo.forknum;
-    aioDescp->blockDesc.blockNum = bufferinfo.blockinfo.blkno;
-    aioDescp->blockDesc.buffer = bufToWrite;
-    aioDescp->blockDesc.blockSize = BLCKSZ;
-    aioDescp->blockDesc.reqType = PageListBackWriteType;
-    aioDescp->blockDesc.bufHdr = bufdesc;
-    aioDescp->blockDesc.descType = AioWrite;
-    aioDescp->blockDesc.lockThreadMask = LOCK_REFCOUNT_ONE_BY_THREADID;
-
-    auto list = t_thrd.storage_cxt.InProgressAioDispatch;
-    int idx = t_thrd.storage_cxt.InProgressAioDispatchCount;
-    list[idx] = aioDescp;
-    t_thrd.storage_cxt.inProgressAioDescs[idx] = bufdesc;
-
-    smgrasyncwrite(reln, bufferinfo.blockinfo.forknum, list + idx, 1);
-
-    if (list[idx] == NULL) {
-        t_thrd.storage_cxt.inProgressAioDescs[idx] = NULL;
-    }
-    t_thrd.storage_cxt.InProgressAioDispatchCount++;
+    AdioDispatchBufferWrite(reln, &bufferinfo, bufToWrite, bufdesc);
 
     t_thrd.storage_cxt.InProgressBuf = NULL;
 }
@@ -6981,6 +6987,9 @@ void WaitIO(BufferDesc *buf)
  * @Param[IN] buf: buffer desc
  * @See also:
  */
+/* poll interval (microseconds) while waiting for in-flight AIO to finish */
+#define ADIO_AIO_WAIT_INTERVAL_US (1000L)
+
 void CheckIOState(volatile void *buf_desc)
 {
     BufferDesc *buf = (BufferDesc *)buf_desc;
@@ -6998,8 +7007,8 @@ void CheckIOState(volatile void *buf_desc)
         if (!(buf_state & BM_IO_IN_PROGRESS)) {
             break;
         }
-        pg_usleep(1000L);
-        wait_us += 1000;
+        pg_usleep(ADIO_AIO_WAIT_INTERVAL_US);
+        wait_us += ADIO_AIO_WAIT_INTERVAL_US;
         if (wait_us > 0 && (wait_us % 10000000L) == 0) {
             ereport(WARNING,
                 (errmsg("CheckIOState: buffer %d still IO_IN_PROGRESS after %lds, "

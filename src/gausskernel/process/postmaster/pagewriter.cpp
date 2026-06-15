@@ -2101,6 +2101,9 @@ static void ckpt_try_skip_invalid_elem_in_queue_head()
     return;
 }
 
+/* poll interval (microseconds) while waiting for in-flight AIO to finish */
+#define ADIO_AIO_WAIT_INTERVAL_US (1000L)
+
 static void WaitAdioFinish()
 {
     for (int i = 0; i < t_thrd.storage_cxt.InProgressAioDispatchCount; i++) {
@@ -2112,15 +2115,18 @@ static void WaitAdioFinish()
         long wait_us = 0;
         BufferTag orig_tag = buf->tag;
 
-        for (;;) {
+        bool ioInProgress = true;
+        while (ioInProgress) {
             uint64 buf_state = LockBufHdr(buf);
             UnlockBufHdr(buf, buf_state);
 
             if (buf_state & BM_IO_ERROR) {
-                break;
+                ioInProgress = false;
+                continue;
             }
             if (!(buf_state & BM_IO_IN_PROGRESS)) {
-                break;
+                ioInProgress = false;
+                continue;
             }
 
             /*
@@ -2141,11 +2147,12 @@ static void WaitAdioFinish()
                         orig_tag.forkNum, orig_tag.blockNum,
                         buf->tag.rnode.spcNode, buf->tag.rnode.dbNode, buf->tag.rnode.relNode,
                         buf->tag.forkNum, buf->tag.blockNum)));
-                break;
+                ioInProgress = false;
+                continue;
             }
 
-            pg_usleep(1000L);
-            wait_us += 1000;
+            pg_usleep(ADIO_AIO_WAIT_INTERVAL_US);
+            wait_us += ADIO_AIO_WAIT_INTERVAL_US;
             if (wait_us > 0 && (wait_us % 10000000L) == 0) {
                 ereport(WARNING,
                     (errmsg("WaitAdioFinish: buffer %d still IO_IN_PROGRESS after %lds, "
@@ -2158,6 +2165,19 @@ static void WaitAdioFinish()
     }
 }
 
+static void DrainInProgressAioDescs()
+{
+    if (t_thrd.storage_cxt.InProgressAioDispatchCount <= 0) {
+        return;
+    }
+    for (int i = 0; i < t_thrd.storage_cxt.InProgressAioDispatchCount; i++) {
+        if (t_thrd.storage_cxt.inProgressAioDescs[i] != NULL) {
+            CheckIOState(t_thrd.storage_cxt.inProgressAioDescs[i]);
+        }
+    }
+    t_thrd.storage_cxt.InProgressAioDispatchCount = 0;
+}
+
 void AdioEnlargeBuffers(int maxbuffers)
 {
     if (maxbuffers <= 0) {
@@ -2168,14 +2188,7 @@ void AdioEnlargeBuffers(int maxbuffers)
                t_thrd.storage_cxt.inProgressAioDescs == NULL ||
                t_thrd.storage_cxt.InProgressAioDispatch == NULL ||
                t_thrd.storage_cxt.aioPageCopyMaxCount < maxbuffers) {
-        if (t_thrd.storage_cxt.InProgressAioDispatchCount > 0) {
-            for (int i = 0; i < t_thrd.storage_cxt.InProgressAioDispatchCount; i++) {
-                if (t_thrd.storage_cxt.inProgressAioDescs[i] != NULL) {
-                    CheckIOState(t_thrd.storage_cxt.inProgressAioDescs[i]);
-                }
-            }
-            t_thrd.storage_cxt.InProgressAioDispatchCount = 0;
-        }
+        DrainInProgressAioDescs();
 
         if (t_thrd.storage_cxt.inProgressAioPageCopys != NULL) {
             adio_align_free(t_thrd.storage_cxt.inProgressAioPageCopys);

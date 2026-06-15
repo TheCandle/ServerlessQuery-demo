@@ -1164,7 +1164,7 @@ void CStoreInsert::CUWrite(int attno, int col)
     aioDescp->cuDesc.slotId = cuDesc->cu_id;
     aioDescp->cuDesc.cu_pointer = cuDesc->cu_pointer;
     aioDescp->cuDesc.io_finish = false;
-    aioDescp->cuDesc.reqType = CUListWriteType;
+    aioDescp->cuDesc.reqType = CU_LIST_WRITE_TYPE;
     aioDescp->aiocb.aio_reqprio = CompltrPriority(aioDescp->cuDesc.reqType);
 
     dList[count] = aioDescp;
