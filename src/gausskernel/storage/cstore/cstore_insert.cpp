@@ -1368,12 +1368,16 @@ void CStoreInsert::SaveAll(int options, _in_ const char* delBitmap)
     /* step 4: unlock extension locker */
     UnlockRelationForExtension(m_relation, ExclusiveLock);
 
-    /* Step 5: Write CU into storage */
-    ADIO_RUN()
-    {
-        CUListWrite();
-    }
-    ADIO_ELSE()
+    /*
+     * Step 5: Write CU into storage.
+     * The asynchronous CU write path (CUListWrite -> CUWrite) was stubbed to a
+     * no-op in this ADIO backport ("return;" at the top of CUWrite). Taking it
+     * when enable_adio_function=on therefore left column-store CUs entirely
+     * unwritten, producing "CU verification failed ... calculated checksum X
+     * but expected 0" data corruption on read. Always use the synchronous
+     * write path below so CUs (and their checksums) are persisted regardless of
+     * enable_adio_function.
+     */
     {
         for (col = 0; col < attno; ++col) {
             if (m_relation->rd_att->attrs[col].attisdropped) {
@@ -1408,7 +1412,6 @@ void CStoreInsert::SaveAll(int options, _in_ const char* delBitmap)
                 DELETE_EX(m_cuPPtr[col]);
         }
     }
-    ADIO_END();
 
     /* step 6: Insert CUDesc of virtual column */
     CStore::SaveVCCUDesc(m_relation->rd_rel->relcudescrelid, m_cuDescPPtr[firstColIdx]->cu_id,
