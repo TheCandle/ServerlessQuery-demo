@@ -27,6 +27,7 @@
 #include "access/double_write.h"
 #include "storage/smgr/segment.h"
 #include "utils/builtins.h"
+#include "utils/aiomem.h"
 
 const uint16 RESULT_LEN = 256;
 Datum dw_get_single_flush_dwn()
@@ -225,7 +226,7 @@ static void dw_recovery_first_version_page()
     SMgrRelation reln = NULL;
     char *unaligned_buf = (char *)palloc0(BLCKSZ + BLCKSZ); /* one more BLCKSZ for alignment */
     char *dw_block = (char *)TYPEALIGN(BLCKSZ, unaligned_buf);
-    char *data_block = (char *)palloc0(BLCKSZ);
+    char *data_block = (char *)mem_align_alloc(BLCKSZ, BLCKSZ);
     dw_first_flush_item flush_item;
     bool needPcaCheck = false;
     bool isFisrt = true;
@@ -284,7 +285,7 @@ static void dw_recovery_first_version_page()
     }
 
     pfree(unaligned_buf);
-    pfree(data_block);
+    mem_align_free(data_block);
 }
 
 static bool dw_verify_item(const dw_single_flush_item* item, uint16 dwn)
@@ -325,7 +326,7 @@ static void dw_recovery_single_page(const dw_single_flush_item *item, uint16 ite
     knl_g_dw_context* single_cxt = &g_instance.dw_single_cxt;
     char *unaligned_buf = (char *)palloc0(BLCKSZ + BLCKSZ); /* one more BLCKSZ for alignment */
     char *dw_block = (char *)TYPEALIGN(BLCKSZ, unaligned_buf);
-    char *data_block = (char *)palloc0(BLCKSZ);
+    char *data_block = (char *)mem_align_alloc(BLCKSZ, BLCKSZ);
     uint64 base_offset = 0;
     bool needPcaCheck = false;
     bool isFisrt = true;
@@ -374,7 +375,7 @@ static void dw_recovery_single_page(const dw_single_flush_item *item, uint16 ite
     }
 
     pfree(unaligned_buf);
-    pfree(data_block);
+    mem_align_free(data_block);
     return;
 }
 

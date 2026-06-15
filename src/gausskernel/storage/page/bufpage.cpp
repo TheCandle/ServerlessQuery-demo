@@ -431,6 +431,26 @@ char* PageSetChecksumCopy(Page page, BlockNumber blkno, bool is_segbuf)
     return dst;
 }
 
+char* AdioPageSetChecksumCopy(Page page, BlockNumber blkno, bool isSegbuf)
+{
+    /* If we don't need a checksum, just return the passed-in data */
+    if (!CheckPageZeroCases((PageHeader)page)) {
+        return (char*)page;
+    }
+
+    char *dst = t_thrd.storage_cxt.inProgressAioPageCopys + t_thrd.storage_cxt.InProgressAioDispatchCount * BLCKSZ;
+
+    errno_t rc = memcpy_s(dst, BLCKSZ, (char*)page, BLCKSZ);
+    securec_check(rc, "", "");
+
+    /* set page->pd_flags mark using FNV1A for checksum */
+    PageSetChecksumByFNV1A(dst);
+
+    ((PageHeader)dst)->pd_checksum = pg_checksum_page(dst, blkno);
+
+    return dst;
+}
+
 /*
  * Set checksum for a page in private memory.
  *

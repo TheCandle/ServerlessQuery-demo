@@ -271,6 +271,7 @@ RewriteState begin_heap_rewrite(Relation old_heap, Relation new_heap, Transactio
 
         for (int i = 0; i < REWRITE_BUFFERS_QUEUE_COUNT * 2; i++) {
             pg_atomic_init_u64(&(state->rs_buffers_handler[i].state), 0);
+            state->rs_buffers_handler[i].extra = NULL;
         }
     }
     ADIO_ELSE()

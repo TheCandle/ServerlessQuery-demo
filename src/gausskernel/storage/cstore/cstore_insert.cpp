@@ -1083,6 +1083,7 @@ void CStoreInsert::CUListFlushAll(int attno)
  */
 void CStoreInsert::CUWrite(int attno, int col)
 {
+    return;
 #ifndef ENABLE_LITE_MODE
     CU* cu = m_cuPPtr[col];
     CUDesc* cuDesc = m_cuDescPPtr[col];

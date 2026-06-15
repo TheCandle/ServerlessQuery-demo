@@ -465,6 +465,7 @@ void CStore::Destroy()
  */
 void CStore::CUPrefetch(CUDesc* cudesc, int col, AioDispatchCUDesc_t** dList, int& count, File* vfdList)
 {
+    return;
 #ifndef ENABLE_LITE_MODE
     CU* cu_ptr = NULL;
     bool found = false;
