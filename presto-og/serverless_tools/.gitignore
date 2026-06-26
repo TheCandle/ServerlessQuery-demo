@@ -1,0 +1,14 @@
+/input
+/output*
+/data
+/mci_logs
+/mci_output
+/data_bak
+/.git.backup
+
+
+__pycache__/
+*.pyc
+*.pyo
+
+
